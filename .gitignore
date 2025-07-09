@@ -1,0 +1,29 @@
+node_modules
+.env
+
+# Ignorar archivos de Lucia que puedan recrearse accidentalmente
+src/agents/luciaServiceAgent_new.ts
+src/agents/luciaServiceAgent_unified.ts
+luciaServiceAgent_new.ts
+luciaServiceAgent_unified.ts
+
+# Ignorar archivos de datos no utilizados que puedan recrearse
+src/data/colombia.json
+src/data/dentix_documents.json
+src/data/
+
+# Ignorar cualquier carpeta scripts que pueda crearse accidentalmente
+src/scripts/
+scripts/
+*/scripts/
+
+client_secret_630085587807-ned3ou0apj8vepd4pv6k7hvlegc7rpld.apps.googleusercontent.com.json
+pruebas-langchain-42949e77bd1d.json
+
+multiagent-test-452318-fddab1e04abe.json
+
+client_secret.json
+multiagent-test-452321-26b045082bfb.json
+token.json
+
+multiagent-test-452321-26b045082bfb.json
