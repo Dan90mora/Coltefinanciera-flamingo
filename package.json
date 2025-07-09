@@ -2,20 +2,10 @@
   "name": "multiagente-node-ts",
   "version": "1.0.0",
   "main": "index.js",
-  "type": "module",
-  "scripts": {
+  "type": "module",  "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "npx tsx src/index.ts",
-    "dev": "npx tsx --watch src/index.ts",
-    "check-setup": "npx tsx src/scripts/checkSetupSimple.ts",
-    "check-supabase": "npx tsx src/scripts/checkSupabaseSetup.ts",
-    "check-credintegral-supabase": "npx tsx src/scripts/checkCredintegralSupabaseSetup.ts",
-    "test-local-search": "npx tsx src/scripts/testLocalSearch.ts",
-    "generate-txt": "npx tsx src/scripts/generateTextFiles.ts",
-    "generate-credintegral-text": "npx tsx src/scripts/generateCredintegralTextFiles.ts",    "upload-to-supabase": "npx tsx src/scripts/uploadToSupabase.ts",
-    "upload-credintegral-to-supabase": "npx tsx src/scripts/uploadCredintegralToSupabase.ts",
-    "test-credintegral": "npx tsx src/scripts/testCredintegralSearch.ts",
-    "test-credintegral-price": "npx tsx src/scripts/testCredintegralPrice.ts"
+    "dev": "npx tsx --watch src/index.ts"
   },
   "keywords": [],
   "author": "",

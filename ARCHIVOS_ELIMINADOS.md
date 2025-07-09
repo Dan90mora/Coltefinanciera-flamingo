@@ -26,9 +26,10 @@ Los siguientes archivos fueron eliminados intencionalmente y NO deben recrearse:
 ## Prevención configurada:
 - Reglas agregadas al `.gitignore` para prevenir recreación automática
 - Documentación actualizada con instrucciones claras
+- Scripts de `package.json` limpiados (solo mantenidos: test, start, dev)
 
 ## Fecha de eliminación:
-8 de julio de 2025
+9 de julio de 2025 (verificación actualizada)
 
 ## ¿Por qué reaparecieron?
 Los archivos `luciaServiceAgent_new.ts` y `luciaServiceAgent_unified.ts` reaparecieron porque:
