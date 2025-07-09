@@ -1,8 +1,15 @@
-# Fenix Chatbot
+# Coltefinanciera Flamingo 🔥
 
-Este proyecto es un chatbot basado en LangChain y LangGraph para la empresa Fenix Producciones.
-Se encarga de gestionar conversaciones con clientes a través de WhatsApp y Twilio, manejando tanto
-ventas como soporte técnico de productos de seguridad.
+Sistema de chat inteligente para Coltefinanciera Seguros con agentes especializados
+
+## 🚀 Características
+
+- **Agente Supervisor (Lucia)**: Gestiona toda la conversación y dirige a especialistas
+- **Agente Especialista en Seguros Dentales (Dentix)**: Experto en seguros odontológicos  
+- **Agente Especialista en Seguros Generales (Credintegral)**: Experto en seguros de protección familiar
+- **Sistema de Reconocimiento de Clientes**: Identifica automáticamente clientes existentes
+- **Búsqueda Vectorial Inteligente**: Recuperación de información optimizada con Supabase
+- **Personalidades de Venta Agresivas**: Agentes altamente persuasivos para maximizar conversiones
 
 Para lograr el equilibrio de cargas usa un sistema de multiagentes con un supervisor que dirige las solicitudes
 al agente adecuado, una vez el agente encargado procesa el supervisor responde al cliente.
