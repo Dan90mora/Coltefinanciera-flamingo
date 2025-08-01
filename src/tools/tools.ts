@@ -1,7 +1,18 @@
 import dotenv from "dotenv";
 import { StructuredTool, tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { contactCustomerService, getProductInfo, troubleshootIssue, getInsuranceInfo, searchDentixDocuments, searchCredintegralDocuments, searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail } from "../functions/functions";
+//import { contactCustomerService, getProductInfo, troubleshootIssue, getInsuranceInfo, searchDentixDocuments, searchCredintegralDocuments, searchBienestarDocuments, searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail, confirmAndUpdateClientData } from "../functions/functions";
+import {
+  troubleshootIssue,
+  getInsuranceInfo,
+  searchDentixDocuments,
+  searchCredintegralDocuments,
+  searchBienestarDocuments,
+  searchDentixClientByPhone,
+  registerDentixClient,
+  sendPaymentLinkEmail,
+  confirmAndUpdateClientData,
+} from "../functions/functions";
 import { extractPhoneNumber } from "../utils/phoneUtils";
 
 dotenv.config();
@@ -27,34 +38,6 @@ export const extractPhoneNumberTool = tool(
       }),
     }
 );
-
-/*
-export const contactTool = tool(
-    async () => {
-      const contact = contactCustomerService();
-      return contact;
-    },
-    {
-      name: 'contacto_servicio_cliente',
-      description: 'Brinda el canal de contacto para ventas y servicios.',
-      schema: z.object({}),
-    }
-);
-*/
-
-/* export const getProductInfoTool = tool(
-    async ({ product }: { product: "cámara" | "alarma" | "cerca eléctrica" }) => {
-      const productInfo = getProductInfo(product);
-      return productInfo;
-    },
-    {
-      name: "get_product_info",
-      description: "Obtiene información sobre un producto específico de Fenix Producciones. Usa esta tool solo cuando el cliente te pregunte por un producto.",
-      schema: z.object({
-        product: z.union([z.literal("cámara"), z.literal("alarma"), z.literal("cerca eléctrica")]),
-      }),
-    }
-); */
 
 export const troubleshootIssueTool = tool(
     async ({ issue }: { issue: string }) => {
@@ -352,4 +335,197 @@ export const sendPaymentLinkEmailTool = tool(
       insuranceName: z.string().describe("El nombre del seguro que el cliente está adquiriendo."),
     }),
   }
+);
+
+export const searchVidaDeudorDocumentsTool = tool(
+    async ({ query }: { query: string }) => {
+      const { searchVidaDeudorDocuments } = await import('../functions/functions');
+      const searchResults = await searchVidaDeudorDocuments(query);
+      return searchResults;
+    },
+    {
+      name: "search_vida_deudor_documents",
+      description: "Busca información específica en los documentos de Vida Deudor sobre seguros de vida, coberturas, beneficios, requisitos y procedimientos. Usa esta tool cuando el cliente pregunte sobre información específica del seguro de Vida Deudor, protección familiar, coberturas por fallecimiento o invalidez.",
+      schema: z.object({
+        query: z.string().describe("La consulta o pregunta del usuario para buscar en los documentos de Vida Deudor"),
+      }),
+    }
+);
+
+export const consultVidaDeudorSpecialistTool = tool(
+    async ({ customerQuery }: { customerQuery: string }) => {
+      console.log(`🛡️ Lucia consulta al especialista Vida Deudor: ${customerQuery}`);
+      
+      // Detectar si es consulta de precio o información general
+      const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta/i.test(customerQuery);
+      
+      try {
+        if (isPriceQuery) {
+          // Para consultas de precio: usar la función optimizada con respuesta directa $500
+          const { searchVidaDeudorDocuments } = await import('../functions/functions');
+          const result = await searchVidaDeudorDocuments(customerQuery);
+          console.log(`✅ Respuesta del especialista Vida Deudor (precio): ${result.substring(0, 100)}...`);
+          return result;
+        } else {
+          // Para consultas de información general: usar búsqueda vectorial en asistenciavida_documents
+          const { searchVidaDeudorVectors } = await import('../functions/retrievers');
+          const vectorResults = await searchVidaDeudorVectors(customerQuery);
+          
+          if (!vectorResults || vectorResults.length === 0) {
+            return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de Vida Deudor. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro de vida deudor?';
+          }
+          
+          // Formatear respuesta con la información encontrada
+          let response = '🛡️ Aquí tienes la información sobre el seguro de Vida Deudor:\n\n';
+          
+          vectorResults.slice(0, 3).forEach((result, index) => {
+            const fileName = result.metadata?.fileName || 'Documento Vida Deudor';
+            response += `📋 **${fileName.replace('.txt', '')}**\n`;
+            response += `${result.content}\n`;
+            response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
+            if (index < vectorResults.length - 1) response += "\n---\n\n";
+          });
+          
+          console.log(`✅ Respuesta del especialista Vida Deudor (información): ${response.substring(0, 100)}...`);
+          return response;
+        }
+      } catch (error) {
+        console.error('❌ Error consultando especialista Vida Deudor:', error);
+        return 'Lo siento, ocurrió un problema técnico al acceder a la información de Vida Deudor. ¿Podrías intentar reformular tu consulta?';
+      }
+    },
+    {
+      name: "consult_vida_deudor_specialist",
+      description: "Consulta al especialista en seguros de Vida Deudor para obtener información detallada sobre coberturas, precios, beneficios y procedimientos. Úsalo cuando el cliente pregunte sobre seguros de vida, protección familiar, coberturas por fallecimiento o invalidez.",
+      schema: z.object({
+        customerQuery: z.string().describe("La consulta específica del cliente sobre el seguro de Vida Deudor"),
+      }),
+    }
+);
+
+export const confirmAndUpdateClientDataTool = tool(
+    async ({ phoneNumber, updates }: { phoneNumber: string; updates?: { name?: string; email?: string; phoneNumber?: string } }) => {
+      console.log(`📋 Tool: Confirmando/actualizando datos del cliente con número: ${phoneNumber}`);
+      
+      if (updates) {
+        console.log(`✏️ Tool: Actualizaciones solicitadas:`, updates);
+      } else {
+        console.log(`📄 Tool: Solo mostrando datos actuales para confirmación`);
+      }
+      
+      const result = await confirmAndUpdateClientData(phoneNumber, updates);
+      console.log(`✅ Tool response: ${result.substring(0, 150)}...`);
+      return result;
+    },
+    {
+      name: "confirm_and_update_client_data",
+      description: "Confirma los datos actuales de un cliente existente (nombre, email, teléfono) y permite actualizarlos si es necesario. Úsalo cuando un cliente existente quiera proceder con la compra de su seguro y necesites verificar/corregir sus datos antes de finalizar. Si no se proporcionan updates, solo mostrará los datos para confirmación.",      schema: z.object({
+        phoneNumber: z.string().describe("Número de teléfono del cliente existente"),
+        updates: z.object({
+          name: z.string().nullable().optional().describe("Nuevo nombre del cliente (opcional)"),
+          email: z.string().nullable().optional().describe("Nuevo email del cliente (opcional)"),
+          phoneNumber: z.string().nullable().optional().describe("Nuevo número de teléfono del cliente (opcional)")
+        }).nullable().optional().describe("Datos a actualizar del cliente (opcional)")
+      }),
+    }
+);
+
+export const consultBienestarSpecialistTool = tool(
+    async ({ customerQuery }: { customerQuery: string }) => {
+      console.log(`🌟 Lucia consulta al especialista Bienestar Plus (SOLO Supabase): ${customerQuery}`);
+      // Unificar todas las palabras clave de precio/costo/valor/tarifa
+      const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara|salud|médica|medicina|hospitalización|consultas|medicamentos|psicología/i.test(customerQuery);
+      const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización/i.test(customerQuery);
+      const isBenefitQuery = /beneficio|beneficios|ventajas/i.test(customerQuery);
+      const isAssistQuery = /asistencial|asistenciales|asistencia/i.test(customerQuery);
+      try {
+        const { searchBienestarVectors } = await import('../functions/retrievers');
+        const { extractBienestarSection } = await import('../functions/functions');
+        let searchQuery = customerQuery;
+        // Si es consulta de precio/costo/valor/tarifa, forzar búsqueda por 'tarifa'
+        if (isPriceQuery) {
+          searchQuery = `tarifa ${customerQuery}`;
+        } else if (isCoverageQuery) {
+          searchQuery = `cobertura servicios médicos ${customerQuery}`;
+        }
+        console.log('[DEBUG] Query enviada a searchBienestarVectors:', searchQuery);
+        const vectorResults = await searchBienestarVectors(searchQuery);
+        console.log('[DEBUG] Resultados crudos de searchBienestarVectors:', JSON.stringify(vectorResults, null, 2));
+        if (!vectorResults || vectorResults.length === 0) {
+          console.log('[DEBUG] No se encontraron resultados vectoriales relevantes.');
+          return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de Bienestar Plus. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro de bienestar familiar?';
+        }
+        const relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
+        console.log('[DEBUG] Resultados relevantes (final_rank > 0.01):', JSON.stringify(relevantResults, null, 2));
+        if (relevantResults.length === 0) {
+          console.log('[DEBUG] Ningún resultado relevante tras el filtrado.');
+          return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de seguros de Bienestar Plus. Mi especialidad son los seguros de bienestar familiar, salud, medicina y protección integral. ¿Podrías preguntarme algo relacionado con seguros de bienestar familiar?';
+        }
+        // Extracción y formateo especial: buscar en TODOS los chunks
+        let response = '';
+        let foundSection = null;
+        let foundInChunk = null;
+        if (isPriceQuery) {
+          for (const result of relevantResults) {
+            const section = extractBienestarSection(result.content, 'precio');
+            console.log('[DEBUG] Sección extraída (precio) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Te explico sobre los precios y costos del seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isCoverageQuery) {
+          for (const result of relevantResults) {
+            const section = extractBienestarSection(result.content, 'cobertura');
+            console.log('[DEBUG] Sección extraída (cobertura) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Te explico sobre la cobertura y servicios que incluye el seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isBenefitQuery) {
+          for (const result of relevantResults) {
+            const section = extractBienestarSection(result.content, 'beneficios');
+            console.log('[DEBUG] Sección extraída (beneficios) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Estos son los beneficios destacados del seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isAssistQuery) {
+          for (const result of relevantResults) {
+            const section = extractBienestarSection(result.content, 'asistenciales');
+            console.log('[DEBUG] Sección extraída (asistenciales) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Estos son los servicios asistenciales incluidos en Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        }
+        // Si no se encontró sección específica, fallback a respuesta general
+        response = 'Como especialista en seguros de Bienestar Plus, te proporciono esta información:\n\n';
+        relevantResults.forEach((result, index) => {
+          const fileName = result.metadata?.fileName || 'Documento Bienestar Plus';
+          response += `📋 **${fileName.replace('.txt', '')}**\n`;
+          response += `${result.content}\n`;
+          response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
+          if (index < relevantResults.length - 1) response += "\n---\n\n";
+        });
+        return response;
+      } catch (error) {
+        console.error('❌ Error consultando base vectorial Bienestar Plus:', error);
+        return 'Lo siento, no pude acceder a la base de datos de seguros de Bienestar Plus en este momento. Por favor intenta nuevamente o contacta a nuestro servicio al cliente.';
+      }
+    },
+    {
+      name: "consult_bienestar_specialist",
+      description: "Consulta al especialista en seguros de Bienestar Plus usando ÚNICAMENTE la base de datos vectorial de Supabase. Obtiene información específica sobre productos, coberturas, beneficios y procedimientos de bienestar familiar. Úsala cuando el cliente pregunte sobre seguros de bienestar, planes de salud, servicios médicos o protección familiar integral.",
+      schema: z.object({
+        customerQuery: z.string().describe("La consulta específica del cliente sobre seguros de bienestar familiar que necesita respuesta especializada"),
+      }),
+    }
 );

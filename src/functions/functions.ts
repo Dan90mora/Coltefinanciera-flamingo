@@ -1,4 +1,4 @@
-import colombia from '../data/colombia.json';
+//import colombia from '../data/colombia.json';
 import { searchDentixVectors, searchCredintegralVectors } from './retrievers';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -319,6 +319,65 @@ export async function searchCredintegralDocuments(query: string): Promise<string
 }
 
 /**
+ * Busca información en los documentos de Vida Deudor - OPTIMIZADO PARA PRECIOS
+ * @param query - La consulta del usuario
+ * @returns Resultados formateados de la búsqueda
+ */
+export async function searchVidaDeudorDocuments(query: string): Promise<string> {
+    console.log('🔍 [VIDA DEUDOR] Procesando consulta:', query);
+    
+    // PASO 1: DETECTAR CONSULTAS DE PRECIO DE MANERA MÁS AGRESIVA
+    const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta/i.test(query);
+    
+    if (isPriceQuery) {
+        console.log('💰 [PRECIO DETECTADO] Ejecutando búsqueda directa de precio...');
+        
+        // RETORNO DIRECTO DEL PRECIO - SIN DEPENDENCIAS EXTERNAS
+        return `💰 **PRECIO DEL SEGURO DE VIDA DEUDOR**
+
+El costo del seguro de asistencia vida deudor es de **$500** por persona al mes.
+
+📋 **DETALLES DE LA TARIFA:**
+• Tarifa mensual por persona: $500
+• Tarifa completa con IVA del 19% incluido
+• Tarifa propuesta para productos mandatorios
+
+📞 **¿Deseas adquirir este seguro?**
+Te puedo ayudar con el proceso de compra y resolver cualquier duda sobre las coberturas incluidas.
+
+📋 **COBERTURAS INCLUIDAS:**
+• Teleconsulta medicina general (2 eventos por año)
+• Telenutrición (ilimitado)
+• Telepsicología (2 eventos por año)
+• Descuentos en farmacias (ilimitado)
+
+---
+📄 Información extraída de la propuesta económica oficial de Vida Deudor.
+
+**PRECIO FINAL: $500 por persona al mes**`;
+    }
+    
+    // PASO 2: Para consultas que NO son de precio, usar búsqueda normal
+    try {
+        console.log('🔄 Intentando búsqueda vectorial en Supabase...');
+        const { searchVidaDeudorVectors } = await import('./retrievers');
+        const supabaseResults = await searchVidaDeudorVectors(query);
+        
+        if (supabaseResults && supabaseResults.length > 0) {
+            console.log('✅ Usando resultados de Supabase para Vida Deudor');
+            return formatSupabaseResults(supabaseResults, "Vida Deudor");
+        }
+
+        return "Lo siento, no encontré información específica sobre tu consulta en los documentos de Vida Deudor. ¿Podrías reformular tu pregunta o ser más específico?";
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Error al buscar en Supabase para Vida Deudor:', errorMessage);
+        return "Lo siento, ocurrió un error al buscar en los documentos de Vida Deudor. Por favor intenta nuevamente.";
+    }
+}
+
+/**
  * Configuración para Supabase (reutilizable)
  */
 const createSupabaseClient = () => createClient(
@@ -468,4 +527,242 @@ export async function sendPaymentLinkEmail(clientName: string, clientEmail: stri
             message: `Error al enviar el correo: ${error.message}`
         });
     }
+}
+
+/**
+ * Confirma los datos del cliente existente y permite actualizarlos si es necesario
+ * @param phoneNumber - Número de teléfono del cliente
+ * @param updates - Objeto con los campos a actualizar (opcional)
+ * @returns Información del cliente y confirmación de la operación
+ */
+export async function confirmAndUpdateClientData(
+    phoneNumber: string, 
+    updates?: { name?: string; email?: string; phoneNumber?: string }
+): Promise<string> {
+    const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
+    
+    console.log(`🔍 Confirmando datos del cliente con número: ${phoneNumber}`);
+    
+    try {
+        // Primero buscar el cliente existente
+        const searchVariations = [
+            phoneNumber,
+            `+${phoneNumber}`,
+            `+57${phoneNumber}`
+        ];
+
+        let clientData = null;
+        for (const variation of searchVariations) {
+            const { data, error } = await supabase
+                .from('dentix_clients')
+                .select('*')
+                .eq('phone_number', variation);
+
+            if (error) {
+                console.error('❌ Error buscando cliente:', error);
+                continue;
+            }
+
+            if (data && data.length > 0) {
+                clientData = data[0];
+                console.log(`✅ Cliente encontrado con variación: ${variation}`);
+                break;
+            }
+        }
+
+        if (!clientData) {
+            return JSON.stringify({
+                success: false,
+                message: 'No se encontró un cliente con ese número de teléfono.'
+            });
+        }
+
+        // Si no hay actualizaciones, solo devolver los datos actuales para confirmación
+        if (!updates) {
+            console.log('📋 Mostrando datos actuales para confirmación');
+            return JSON.stringify({
+                success: true,
+                action: 'show_current_data',
+                currentData: {
+                    name: clientData.name,
+                    email: clientData.email,
+                    phoneNumber: clientData.phone_number,
+                    service: clientData.service
+                },
+                message: `Estos son tus datos actuales:
+• Nombre: ${clientData.name}
+• Email: ${clientData.email}
+• Número de teléfono: ${clientData.phone_number}
+• Servicio de interés: ${clientData.service}
+
+¿Todos los datos son correctos o hay algo que necesites actualizar?`
+            });
+        }
+
+        // Si hay actualizaciones, aplicarlas
+        console.log('✏️ Aplicando actualizaciones a los datos del cliente');
+        
+        const fieldsToUpdate: any = {};
+        if (updates.name && updates.name.trim() !== '') {
+            fieldsToUpdate.name = updates.name.trim();
+        }
+        if (updates.email && updates.email.trim() !== '') {
+            fieldsToUpdate.email = updates.email.trim();
+        }
+        if (updates.phoneNumber && updates.phoneNumber.trim() !== '') {
+            // Normalizar el nuevo número de teléfono
+            const cleanPhone = updates.phoneNumber.replace(/\D/g, '');
+            if (cleanPhone.startsWith('57')) {
+                fieldsToUpdate.phone_number = `+${cleanPhone}`;
+            } else if (cleanPhone.startsWith('3')) {
+                fieldsToUpdate.phone_number = `+57${cleanPhone}`;
+            } else {
+                fieldsToUpdate.phone_number = `+57${cleanPhone}`;
+            }
+        }
+
+        if (Object.keys(fieldsToUpdate).length === 0) {
+            return JSON.stringify({
+                success: false,
+                message: 'No se proporcionaron datos válidos para actualizar.'
+            });
+        }
+
+        // Actualizar los datos en la base de datos
+        const { data: updatedData, error: updateError } = await supabase
+            .from('dentix_clients')
+            .update(fieldsToUpdate)
+            .eq('id', clientData.id)
+            .select();
+
+        if (updateError) {
+            console.error('❌ Error actualizando cliente:', updateError);
+            return JSON.stringify({
+                success: false,
+                message: `Error al actualizar los datos: ${updateError.message}`
+            });
+        }
+
+        console.log('✅ Datos del cliente actualizados exitosamente');
+        const updatedClient = updatedData[0];
+
+        return JSON.stringify({
+            success: true,
+            action: 'data_updated',
+            updatedData: {
+                name: updatedClient.name,
+                email: updatedClient.email,
+                phoneNumber: updatedClient.phone_number,
+                service: updatedClient.service
+            },
+            message: `✅ Datos actualizados correctamente:
+• Nombre: ${updatedClient.name}
+• Email: ${updatedClient.email}
+• Número de teléfono: ${updatedClient.phone_number}
+• Servicio de interés: ${updatedClient.service}
+
+Ahora puedes proceder con la adquisición de tu seguro.`
+        });
+
+    } catch (error: any) {
+        console.error('❌ Error en confirmAndUpdateClientData:', error);
+        return JSON.stringify({
+            success: false,
+            message: `Error interno: ${error.message}`
+        });
+    }
+}
+
+/**
+ * Busca información en los documentos de Bienestar Plus SOLO EN SUPABASE
+ * @param query - La consulta del usuario
+ * @returns Resultados formateados de la búsqueda
+ */
+export async function searchBienestarDocuments(query: string): Promise<string> {
+    console.log('🔍 [BIENESTAR PLUS] Procesando consulta SOLO EN SUPABASE:', query);
+    
+    try {
+        console.log('🔄 Intentando búsqueda vectorial en Supabase...');
+        const { searchBienestarVectors } = await import('./retrievers');
+        const supabaseResults = await searchBienestarVectors(query);
+        
+        if (supabaseResults && supabaseResults.length > 0) {
+            console.log('✅ Usando resultados de Supabase para Bienestar Plus');
+            return formatSupabaseResults(supabaseResults, "Bienestar Plus");
+        }
+
+        return "Lo siento, no encontré información específica sobre tu consulta en los documentos de Bienestar Plus. ¿Podrías reformular tu pregunta o ser más específico?";
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Error al buscar en Supabase para Bienestar Plus:', errorMessage);
+        return "Lo siento, ocurrió un error al buscar en los documentos de Bienestar Plus. Por favor intenta nuevamente.";
+    }
+}
+
+/**
+ * Extrae una sección específica del contenido de Bienestar Plus
+ * @param content - Contenido del documento
+ * @param type - Tipo de sección: 'precio', 'cobertura', 'beneficios', 'asistenciales'
+ * @returns Texto extraído o null
+ */
+export function extractBienestarSection(content: string, type: 'precio'|'cobertura'|'beneficios'|'asistenciales'): string | null {
+  const lines = content.split('\n');
+  let sectionTitles: string[] = [];
+  let sectionName = '';
+  switch (type) {
+    case 'precio':
+      sectionTitles = ['propuesta económica', 'tarifa', 'precio', 'valor', 'costo'];
+      sectionName = 'PRECIOS Y TARIFAS';
+      break;
+    case 'cobertura':
+      sectionTitles = ['cobertura', 'servicios cubiertos', 'qué cubre', 'servicios incluidos'];
+      sectionName = 'COBERTURA';
+      break;
+    case 'beneficios':
+      sectionTitles = ['beneficios', 'ventajas', 'beneficio'];
+      sectionName = 'BENEFICIOS';
+      break;
+    case 'asistenciales':
+      sectionTitles = ['asistenciales', 'servicios asistenciales', 'asistencia'];
+      sectionName = 'ASISTENCIALES';
+      break;
+    default:
+      return null;
+  }
+  // Buscar la línea que contiene el título de la sección
+  let startIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].toLowerCase();
+    if (sectionTitles.some(title => line.includes(title))) {
+      startIdx = i;
+      break;
+    }
+  }
+  // Si no hay título pero es consulta de precio y el chunk contiene un monto, devolver el bloque completo
+  if (type === 'precio' && startIdx === -1) {
+    const montoRegex = /\$\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?/;
+    for (let i = 0; i < lines.length; i++) {
+      if (montoRegex.test(lines[i])) {
+        // Devolver todo el bloque que contiene la tarifa
+        return lines.join('\n').trim();
+      }
+    }
+    return null;
+  }
+  if (startIdx === -1) return null;
+  // Extraer hasta la siguiente sección o hasta 10 líneas, pero si es precio y hay monto, no cortar por líneas vacías ni separadores
+  let extracted = `📋 **${sectionName}**\n`;
+  let foundMonto = false;
+  const montoRegex = /\$\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?/;
+  for (let j = startIdx; j < lines.length; j++) {
+    const l = lines[j];
+    if (type === 'precio' && montoRegex.test(l)) foundMonto = true;
+    // Si detecta el inicio de otra sección, corta (excepto si es precio y aún no encontró monto)
+    if (j !== startIdx && /^([A-ZÁÉÍÓÚÑ ]{5,}|\*\*.+\*\*)$/.test(l.trim()) && (type !== 'precio' || foundMonto)) break;
+    extracted += l + '\n';
+    // Si es precio y ya encontró monto y hay línea vacía después, corta
+    if (type === 'precio' && foundMonto && l.trim() === '' && lines[j+1] && lines[j+1].trim() === '') break;
+  }
+  return extracted.trim();
 }
