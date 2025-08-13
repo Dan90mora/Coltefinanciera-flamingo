@@ -1,0 +1,19 @@
+{
+  "files.exclude": {
+    "**/test_*": true
+  },
+  "search.exclude": {
+    "**/test_*": true
+  },
+  "files.watcherExclude": {
+    "**/test_*": true
+  },
+  "workbench.editor.restoreViewState": false,
+  "workbench.editor.enablePreview": true,
+  "workbench.editor.enablePreviewFromQuickOpen": true,
+  "workbench.editor.closeEmptyGroups": true,
+  "explorer.autoReveal": false,
+  "files.hotExit": "off",
+  "workbench.editor.closeOnFileDelete": true,
+  "workbench.editor.revealIfOpen": true
+}

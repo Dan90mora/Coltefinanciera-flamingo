@@ -4,6 +4,9 @@ node_modules
 # Ignorar todos los archivos de test
 test_*
 
+# Configuración de VS Code
+.vscode/settings.json
+
 # Ignorar archivos de Lucia que puedan recrearse accidentalmente
 src/agents/luciaServiceAgent_new.ts
 src/agents/luciaServiceAgent_unified.ts
