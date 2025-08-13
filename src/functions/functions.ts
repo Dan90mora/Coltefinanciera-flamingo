@@ -495,11 +495,11 @@ export async function sendPaymentLinkEmail(clientName: string, clientEmail: stri
     `;
 
     const msg = {
-        to: clientEmail,
-        from: 'grow@ultimmarketing.com', // <-- 🚨 REEMPLAZA ESTO con tu email verificado en SendGrid
-        subject: `Finaliza la compra de tu ${insuranceName}`,
-        text: emailContent,
-        html: emailContent.replace(/\n/g, '<br>'),
+      to: clientEmail,
+      from: "notificaciones@asistenciacoltefinanciera.com", // <-- 🚨 REEMPLAZA ESTO con tu email verificado en SendGrid
+      subject: `Finaliza la compra de tu ${insuranceName}`,
+      text: emailContent,
+      html: emailContent.replace(/\n/g, "<br>"),
     };
 
     if (!process.env.SENDGRID_API_KEY) {
@@ -1004,11 +1004,11 @@ export async function sendVidaDeudorActivationEmail(clientName: string, clientEm
     `;
 
     const msg = {
-        to: clientEmail,
-        from: 'grow@ultimmarketing.com',
-        subject: '✅ Tu Asistencia Vida Deudor ha sido activada',
-        text: emailContent,
-        html: emailContent.replace(/\n/g, '<br>'),
+      to: clientEmail,
+      from: "notificaciones@asistenciacoltefinanciera.com",
+      subject: "✅ Tu Asistencia Vida Deudor ha sido activada",
+      text: emailContent,
+      html: emailContent.replace(/\n/g, "<br>"),
     };
 
     if (!process.env.SENDGRID_API_KEY) {
