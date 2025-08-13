@@ -35,3 +35,6 @@ token.json
 multiagent-test-452321-26b045082bfb.json
 # Scripts de verificación (no indispensables para producción)
 verify_*.sh
+
+# Archivos de verificación y testing (no indispensables para producción)
+verify_*
