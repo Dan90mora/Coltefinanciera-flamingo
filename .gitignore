@@ -1,6 +1,9 @@
 node_modules
 .env
 
+# Ignorar todos los archivos de test
+test_*
+
 # Ignorar archivos de Lucia que puedan recrearse accidentalmente
 src/agents/luciaServiceAgent_new.ts
 src/agents/luciaServiceAgent_unified.ts
