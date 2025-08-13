@@ -38,3 +38,6 @@ verify_*.sh
 
 # Archivos de verificación y testing (no indispensables para producción)
 verify_*
+
+# Documentación markdown (no indispensable para funcionamiento del agente)
+*.md
