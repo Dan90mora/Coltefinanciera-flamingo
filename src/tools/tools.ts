@@ -105,8 +105,7 @@ export const searchDentixClientTool = tool(
       console.log(`🔍 Tool: Buscando cliente con número: ${phoneNumber}`);
       
       const clientInfo = await searchDentixClientByPhone(phoneNumber);
-      
-      // Formatear la respuesta para el LLM de manera clara
+        // Formatear la respuesta para el LLM de manera clara
       if (clientInfo && clientInfo.name) {
         // Cliente encontrado, devolver un objeto estructurado
         const result = {
@@ -114,7 +113,8 @@ export const searchDentixClientTool = tool(
             name: clientInfo.name,
             email: clientInfo.email,
             phoneNumber: clientInfo.phone_number,
-            service: clientInfo.service
+            service: clientInfo.service,
+            product: clientInfo.product
         };
         console.log(`✅ Tool response: Cliente encontrado`, result);
         return JSON.stringify(result);
@@ -337,6 +337,9 @@ export const sendPaymentLinkEmailTool = tool(
   }
 );
 
+// HERRAMIENTA COMENTADA: Esta herramienta usaba searchVidaDeudorDocuments que devuelve precios hardcodeados
+// Para evitar que los agentes accedan a precios específicos para clientes existentes con vida deudor
+/*
 export const searchVidaDeudorDocumentsTool = tool(
     async ({ query }: { query: string }) => {
       const { searchVidaDeudorDocuments } = await import('../functions/functions');
@@ -351,44 +354,82 @@ export const searchVidaDeudorDocumentsTool = tool(
       }),
     }
 );
+*/
 
-export const consultVidaDeudorSpecialistTool = tool(
-    async ({ customerQuery }: { customerQuery: string }) => {
+export const consultVidaDeudorSpecialistTool = tool(    async ({ customerQuery, clientInfo, phoneNumber }: { customerQuery: string; clientInfo?: { name?: string; service?: string; product?: string }; phoneNumber?: string }) => {
       console.log(`🛡️ Lucia consulta al especialista Vida Deudor: ${customerQuery}`);
-      
-      // Detectar si es consulta de precio o información general
-      const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta/i.test(customerQuery);
+      console.log(`👤 Información del cliente recibida:`, clientInfo);
+      console.log(`📞 Número de teléfono recibido:`, phoneNumber);
       
       try {
+        // Si no tenemos información del cliente pero tenemos número, buscarla
+        let finalClientInfo = clientInfo;
+        if (!finalClientInfo && phoneNumber) {
+          console.log(`🔍 Buscando información del cliente con número: ${phoneNumber}`);
+          const clientData = await searchDentixClientByPhone(phoneNumber);
+          if (clientData) {
+            finalClientInfo = {
+              name: clientData.name,
+              service: clientData.service,
+              product: clientData.product
+            };
+            console.log(`✅ Información del cliente encontrada:`, finalClientInfo);
+          }
+        }
+        // DETECTAR CONSULTAS DE PRECIO Y RESPONDER SIN BUSCAR EN BASE DE DATOS
+        const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta|cuestan|cuesta|cobran|cobrar/i.test(customerQuery);
+        
         if (isPriceQuery) {
-          // Para consultas de precio: usar la función optimizada con respuesta directa $500
-          const { searchVidaDeudorDocuments } = await import('../functions/functions');
-          const result = await searchVidaDeudorDocuments(customerQuery);
-          console.log(`✅ Respuesta del especialista Vida Deudor (precio): ${result.substring(0, 100)}...`);
-          return result;
-        } else {
-          // Para consultas de información general: usar búsqueda vectorial en asistenciavida_documents
-          const { searchVidaDeudorVectors } = await import('../functions/retrievers');
-          const vectorResults = await searchVidaDeudorVectors(customerQuery);
-          
-          if (!vectorResults || vectorResults.length === 0) {
-            return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de Vida Deudor. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro de vida deudor?';
+          console.log('💰 [PRECIO DETECTADO] Respondiendo con mensaje estándar para clientes existentes');
+            // Personalizar el mensaje si tenemos información del cliente
+          let mensajePersonalizado = '';
+          if (finalClientInfo && finalClientInfo.product) {
+            mensajePersonalizado = `\n🎯 **RECORDATORIO:** Este beneficio está incluido por haber adquirido tu ${finalClientInfo.product} con nosotros.\n`;
           }
           
-          // Formatear respuesta con la información encontrada
-          let response = '🛡️ Aquí tienes la información sobre el seguro de Vida Deudor:\n\n';
-          
-          vectorResults.slice(0, 3).forEach((result, index) => {
-            const fileName = result.metadata?.fileName || 'Documento Vida Deudor';
-            response += `📋 **${fileName.replace('.txt', '')}**\n`;
-            response += `${result.content}\n`;
-            response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
-            if (index < vectorResults.length - 1) response += "\n---\n\n";
-          });
-          
-          console.log(`✅ Respuesta del especialista Vida Deudor (información): ${response.substring(0, 100)}...`);
-          return response;
+          return `📞 **INFORMACIÓN IMPORTANTE SOBRE CONTINUIDAD**
+
+Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRATIS, no necesitas preocuparte por costos en este momento.${mensajePersonalizado}
+🔔 **PROCESO DE CONTACTO:**
+• **Antes de que se acabe el tercer mes, te estaremos llamando para comunicarte cómo continúa funcionando este beneficio**
+• Nuestro equipo especializado te explicará todas las opciones disponibles
+• Te daremos toda la información necesaria para que tomes la mejor decisión
+
+🛡️ **MIENTRAS TANTO:**
+• Disfruta de tus 3 meses gratuitos
+• Usa todos los servicios incluidos sin restricciones
+• No tienes que hacer ningún pago adicional por ahora
+
+¿Te gustaría que te explique más sobre los servicios incluidos en tu asistencia?`;
         }
+          // PARA CONSULTAS QUE NO SON DE PRECIO: Buscar SOLO en base vectorial de Supabase
+        const { searchVidaDeudorVectors } = await import('../functions/retrievers');
+        const vectorResults = await searchVidaDeudorVectors(customerQuery);
+        
+        if (!vectorResults || vectorResults.length === 0) {
+          return 'Lo siento, no encontré información específica sobre tu consulta en nuestra base de datos de Vida Deudor. ¿Podrías reformular tu pregunta o ser más específico sobre la asistencia de vida deudor?';
+        }        // Formatear respuesta SOLO con información de la base vectorial
+        let response = '';
+        
+        // Personalizar el encabezado según la información del cliente
+        if (finalClientInfo && finalClientInfo.service === 'vidadeudor' && finalClientInfo.product) {
+          response = `🎯 **Como beneficiario por tu ${finalClientInfo.product}:** Te proporciono información específica sobre tu asistencia Vida Deudor:\n\n`;
+        } else if (finalClientInfo && finalClientInfo.service === 'vidadeudor') {
+          response = `🎯 **Como cliente con servicio activo:** Te proporciono información sobre tu asistencia Vida Deudor:\n\n`;
+        } else {
+          response = '🛡️ Según nuestra base de datos de Vida Deudor, aquí tienes la información:\n\n';
+        }
+        
+        vectorResults.slice(0, 3).forEach((result, index) => {
+          const fileName = result.metadata?.fileName || 'Documento Vida Deudor';
+          response += `📋 **${fileName.replace('.txt', '')}**\n`;
+          response += `${result.content}\n`;
+          response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
+          if (index < vectorResults.length - 1) response += "\n---\n\n";
+        });
+        
+        console.log(`✅ Respuesta del especialista Vida Deudor (información): ${response.substring(0, 100)}...`);
+        return response;
       } catch (error) {
         console.error('❌ Error consultando especialista Vida Deudor:', error);
         return 'Lo siento, ocurrió un problema técnico al acceder a la información de Vida Deudor. ¿Podrías intentar reformular tu consulta?';
@@ -396,9 +437,14 @@ export const consultVidaDeudorSpecialistTool = tool(
     },
     {
       name: "consult_vida_deudor_specialist",
-      description: "Consulta al especialista en seguros de Vida Deudor para obtener información detallada sobre coberturas, precios, beneficios y procedimientos. Úsalo cuando el cliente pregunte sobre seguros de vida, protección familiar, coberturas por fallecimiento o invalidez.",
-      schema: z.object({
+      description: "Consulta al especialista en seguros de Vida Deudor para obtener información detallada sobre coberturas, precios, beneficios y procedimientos. Úsalo cuando el cliente pregunte sobre seguros de vida, protección familiar, coberturas por fallecimiento o invalidez.",      schema: z.object({
         customerQuery: z.string().describe("La consulta específica del cliente sobre el seguro de Vida Deudor"),
+        clientInfo: z.object({
+          name: z.string().nullable().optional().describe("Nombre del cliente"),
+          service: z.string().nullable().optional().describe("Servicio del cliente (vidadeudor, dentix, etc.)"),
+          product: z.string().nullable().optional().describe("Producto específico del cliente")
+        }).nullable().optional().describe("Información del cliente para personalizar la respuesta"),
+        phoneNumber: z.string().nullable().optional().describe("Número de teléfono del cliente para buscar información adicional si es necesario")
       }),
     }
 );
@@ -528,4 +574,66 @@ export const consultBienestarSpecialistTool = tool(
         customerQuery: z.string().describe("La consulta específica del cliente sobre seguros de bienestar familiar que necesita respuesta especializada"),
       }),
     }
+);
+
+export const sendVidaDeudorActivationEmailTool = tool(
+  async ({ clientName, clientEmail }: { clientName: string; clientEmail: string; }) => {
+    const { sendVidaDeudorActivationEmail } = await import('../functions/functions');
+    const result = await sendVidaDeudorActivationEmail(clientName, clientEmail);
+    return result;
+  },
+  {
+    name: "sendVidaDeudorActivationEmail",
+    description: "Envía un correo electrónico de activación especial para clientes existentes con servicio vida deudor que aceptan el seguro. Este correo NO incluye enlace de pago ya que obtienen 3 meses gratis. ÚSALO SOLO para clientes existentes con service='vidadeudor' cuando acepten el seguro.",
+    schema: z.object({
+      clientName: z.string().describe("El nombre completo del cliente existente."),
+      clientEmail: z.string().describe("El correo electrónico del cliente existente."),
+    }),
+  }
+);
+
+export const showVidaDeudorClientDataTool = tool(
+  async ({ phoneNumber }: { phoneNumber: string }) => {
+    console.log(`🛡️ [VIDA DEUDOR] Tool: Mostrando datos para confirmación - Cliente: ${phoneNumber}`);
+    
+    const { showVidaDeudorClientDataForConfirmation } = await import('../functions/functions');
+    const result = await showVidaDeudorClientDataForConfirmation(phoneNumber);
+    console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
+    return result;
+  },
+  {
+    name: "show_vida_deudor_client_data",
+    description: "Muestra los datos del cliente (document_id=cédula, name=nombre, phone_number=celular, email=correo electrónico) para confirmación antes de activar la asistencia vida deudor. ÚSALO cuando un cliente existente quiera adquirir vida deudor y necesites que confirme sus datos.",
+    schema: z.object({
+      phoneNumber: z.string().describe("Número de teléfono del cliente existente"),
+    }),
+  }
+);
+
+export const updateVidaDeudorClientDataTool = tool(
+  async ({ phoneNumber, updates }: { 
+    phoneNumber: string; 
+    updates: { document_id?: string; name?: string; phone_number?: string; email?: string } 
+  }) => {
+    console.log(`🛡️ [VIDA DEUDOR] Tool: Actualizando datos del cliente: ${phoneNumber}`);
+    console.log(`✏️ Tool: Actualizaciones solicitadas:`, updates);
+    
+    const { updateVidaDeudorClientData } = await import('../functions/functions');
+    const result = await updateVidaDeudorClientData(phoneNumber, updates);
+    console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
+    return result;
+  },
+  {
+    name: "update_vida_deudor_client_data",
+    description: "Actualiza los datos específicos de un cliente para el flujo de vida deudor (document_id=cédula, name=nombre, phone_number=celular, email=correo electrónico). ÚSALO después de que el cliente confirme cambios en sus datos antes de activar vida deudor.",
+    schema: z.object({
+      phoneNumber: z.string().describe("Número de teléfono del cliente existente"),
+      updates: z.object({
+        document_id: z.string().nullable().optional().describe("Nueva cédula del cliente (opcional)"),
+        name: z.string().nullable().optional().describe("Nuevo nombre del cliente (opcional)"),
+        phone_number: z.string().nullable().optional().describe("Nuevo número de teléfono del cliente (opcional)"),
+        email: z.string().nullable().optional().describe("Nuevo correo electrónico del cliente (opcional)")
+      }).describe("Datos a actualizar del cliente")
+    }),
+  }
 );

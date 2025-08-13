@@ -318,11 +318,10 @@ export async function searchCredintegralDocuments(query: string): Promise<string
     }
 }
 
-/**
- * Busca información en los documentos de Vida Deudor - OPTIMIZADO PARA PRECIOS
- * @param query - La consulta del usuario
- * @returns Resultados formateados de la búsqueda
- */
+// FUNCIÓN COMENTADA: Esta función devuelve precio hardcodeado ($500) que viola las restricciones
+// de precio para clientes existentes con service="vidadeudor". La función ha sido deshabilitada
+// para evitar que el agente acceda al precio real después de los 3 meses gratuitos.
+/*
 export async function searchVidaDeudorDocuments(query: string): Promise<string> {
     console.log('🔍 [VIDA DEUDOR] Procesando consulta:', query);
     
@@ -330,20 +329,20 @@ export async function searchVidaDeudorDocuments(query: string): Promise<string> 
     const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta/i.test(query);
     
     if (isPriceQuery) {
-        console.log('💰 [PRECIO DETECTADO] Ejecutando búsqueda directa de precio...');
+        console.log('💰 [PRECIO DETECTADO] Para clientes nuevos...');
         
-        // RETORNO DIRECTO DEL PRECIO - SIN DEPENDENCIAS EXTERNAS
-        return `💰 **PRECIO DEL SEGURO DE VIDA DEUDOR**
+        // RETORNO DEL PRECIO SOLO PARA CLIENTES NUEVOS
+        // NOTA: Para clientes existentes con service="vidadeudor", el agente debe manejar esto según el prompt
+        return `💰 **INFORMACIÓN SOBRE LA ASISTENCIA VIDA DEUDOR**
 
-El costo del seguro de asistencia vida deudor es de **$500** por persona al mes.
+La asistencia Vida Deudor tiene un costo de **$500** por persona al mes para usuarios regulares.
 
 📋 **DETALLES DE LA TARIFA:**
 • Tarifa mensual por persona: $500
 • Tarifa completa con IVA del 19% incluido
 • Tarifa propuesta para productos mandatorios
 
-📞 **¿Deseas adquirir este seguro?**
-Te puedo ayudar con el proceso de compra y resolver cualquier duda sobre las coberturas incluidas.
+⚠️ **NOTA IMPORTANTE:** Si eres cliente existente con un servicio/crédito activo, puedes tener beneficios especiales. Tu asesor te informará sobre cualquier promoción disponible.
 
 📋 **COBERTURAS INCLUIDAS:**
 • Teleconsulta medicina general (2 eventos por año)
@@ -354,7 +353,7 @@ Te puedo ayudar con el proceso de compra y resolver cualquier duda sobre las cob
 ---
 📄 Información extraída de la propuesta económica oficial de Vida Deudor.
 
-**PRECIO FINAL: $500 por persona al mes**`;
+**PRECIO ESTÁNDAR: $500 por persona al mes**`;
     }
     
     // PASO 2: Para consultas que NO son de precio, usar búsqueda normal
@@ -376,6 +375,7 @@ Te puedo ayudar con el proceso de compra y resolver cualquier duda sobre las cob
         return "Lo siento, ocurrió un error al buscar en los documentos de Vida Deudor. Por favor intenta nuevamente.";
     }
 }
+*/
 
 /**
  * Configuración para Supabase (reutilizable)
@@ -390,7 +390,7 @@ const createSupabaseClient = () => createClient(
  * @param phoneNumber - El número telefónico del cliente
  * @returns Información del cliente si existe, null si no se encuentra
  */
-export async function searchDentixClientByPhone(phoneNumber: string): Promise<{ name: string; email: string; phone_number: string; service?: string; } | null> {
+export async function searchDentixClientByPhone(phoneNumber: string): Promise<{ name: string; email: string; phone_number: string; service?: string; product?: string; } | null> {
     console.log(`🔍 Buscando cliente en Supabase con número: ${phoneNumber}`);
     
     const supabaseUrl = process.env.SUPABASE_URL;
@@ -426,11 +426,10 @@ export async function searchDentixClientByPhone(phoneNumber: string): Promise<{ 
     const variationsToSearch = Array.from(searchVariations);
     console.log(`🔍 Búsquedas para el número "${phoneNumber}":`, variationsToSearch);
 
-    try {
-        // 3. Buscar en la base de datos con todas las variaciones
+    try {        // 3. Buscar en la base de datos con todas las variaciones
         const { data, error } = await supabase
             .from('dentix_clients')
-            .select('name, email, phone_number, service')
+            .select('name, email, phone_number, service, product')
             .in('phone_number', variationsToSearch)
             .maybeSingle(); // .maybeSingle() para que no dé error si encuentra 0 o 1
 
@@ -674,6 +673,214 @@ Ahora puedes proceder con la adquisición de tu seguro.`
 }
 
 /**
+ * Muestra los datos del cliente para confirmación en el flujo de vida deudor
+ * @param phoneNumber - Número de teléfono del cliente
+ * @returns Datos del cliente en formato específico para vida deudor
+ */
+export async function showVidaDeudorClientDataForConfirmation(phoneNumber: string): Promise<string> {
+    console.log(`🛡️ [VIDA DEUDOR] Mostrando datos para confirmación - Cliente: ${phoneNumber}`);
+    
+    const supabase = createSupabaseClient();
+    
+    try {        // Buscar cliente con las variaciones de número
+        const cleanNumber = phoneNumber.replace(/[\s\-\(\)\+]/g, '');
+        const searchVariations = [
+            phoneNumber,                              // Número original
+            phoneNumber.replace(/[\s\-\(\)]/g, ''),  // Sin espacios/guiones
+            cleanNumber,                             // Sin espacios, guiones, ni +
+            cleanNumber.startsWith('57') ? cleanNumber.substring(2) : cleanNumber, // Sin código país 57
+            `+${cleanNumber}`,                       // Con + al inicio
+            `+57${cleanNumber.startsWith('57') ? cleanNumber.substring(2) : cleanNumber}`, // +57 + número local
+            cleanNumber.startsWith('57') ? `+57${cleanNumber.substring(2)}` : `+57${cleanNumber}` // Asegurar +57
+        ];
+
+        // Eliminar duplicados y números vacíos
+        const uniqueVariations = [...new Set(searchVariations)].filter(v => v && v.length >= 10);
+        
+        console.log(`🔍 Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);        console.log(`🔍 Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);
+
+        let clientData = null;
+        for (const variation of uniqueVariations) {
+            const { data, error } = await supabase
+                .from('dentix_clients')
+                .select('document_id, name, phone_number, email, service')
+                .eq('phone_number', variation)
+                .maybeSingle();
+
+            if (error) {
+                console.error('❌ Error buscando cliente:', error);
+                continue;
+            }
+
+            if (data) {
+                clientData = data;
+                console.log(`✅ Cliente encontrado con variación: ${variation}`);
+                break;
+            }
+        }        if (!clientData) {
+            return 'No se encontró un cliente con ese número de teléfono. ¿Podrías verificar el número y intentar nuevamente?';
+        }
+
+        // Formatear datos en el formato específico solicitado
+        const formattedData = {
+            document_id: clientData.document_id || 'No registrado', // cédula
+            name: clientData.name || 'No registrado', // nombre
+            phone_number: clientData.phone_number || 'No registrado', // celular
+            email: clientData.email || 'No registrado' // correo electrónico
+        };
+
+        const confirmationMessage = `🛡️ **CONFIRMACIÓN DE DATOS PARA ASISTENCIA VIDA DEUDOR**
+
+Por favor confirma que estos datos son correctos:
+
+📋 **Cédula:** ${formattedData.document_id}
+👤 **Nombre:** ${formattedData.name}
+📱 **Celular:** ${formattedData.phone_number}
+📧 **Correo electrónico:** ${formattedData.email}
+
+¿Todos los datos son correctos o necesitas modificar alguno antes de activar tu asistencia Vida Deudor?`;
+
+        console.log(`✅ Datos formateados para confirmación:`, formattedData);
+        return confirmationMessage;    } catch (error: any) {
+        console.error('❌ Error en showVidaDeudorClientDataForConfirmation:', error);
+        return `Error interno al buscar tus datos: ${error.message}. Por favor intenta nuevamente.`;
+    }
+}
+
+/**
+ * Actualiza datos específicos de un cliente para el flujo de vida deudor
+ * @param phoneNumber - Número de teléfono del cliente
+ * @param updates - Datos a actualizar (document_id, name, phone_number, email)
+ * @returns Resultado de la actualización
+ */
+export async function updateVidaDeudorClientData(
+    phoneNumber: string,
+    updates: { document_id?: string; name?: string; phone_number?: string; email?: string }
+): Promise<string> {
+    console.log(`🛡️ [VIDA DEUDOR] Actualizando datos del cliente: ${phoneNumber}`);
+    
+    const supabase = createSupabaseClient();
+      try {
+        // Buscar cliente con las variaciones de número (misma lógica que showVidaDeudorClientDataForConfirmation)
+        const cleanNumber = phoneNumber.replace(/[\s\-\(\)\+]/g, '');
+        const searchVariations = [
+            phoneNumber,                              // Número original
+            phoneNumber.replace(/[\s\-\(\)]/g, ''),  // Sin espacios/guiones
+            cleanNumber,                             // Sin espacios, guiones, ni +
+            cleanNumber.startsWith('57') ? cleanNumber.substring(2) : cleanNumber, // Sin código país 57
+            `+${cleanNumber}`,                       // Con + al inicio
+            `+57${cleanNumber.startsWith('57') ? cleanNumber.substring(2) : cleanNumber}`, // +57 + número local
+            cleanNumber.startsWith('57') ? `+57${cleanNumber.substring(2)}` : `+57${cleanNumber}` // Asegurar +57
+        ];
+
+        // Eliminar duplicados y números vacíos
+        const uniqueVariations = [...new Set(searchVariations)].filter(v => v && v.length >= 10);
+        
+        console.log(`🔍 [UPDATE] Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);
+
+        let clientData = null;
+        for (const variation of uniqueVariations) {
+            const { data, error } = await supabase
+                .from('dentix_clients')
+                .select('*')
+                .eq('phone_number', variation)
+                .maybeSingle();
+
+            if (error) {
+                console.error('❌ Error buscando cliente:', error);
+                continue;
+            }
+
+            if (data) {
+                clientData = data;
+                console.log(`✅ Cliente encontrado con variación: ${variation}`);
+                break;
+            }
+        }
+
+        if (!clientData) {
+            return JSON.stringify({
+                success: false,
+                message: 'No se encontró un cliente con ese número de teléfono.'
+            });
+        }
+
+        // Preparar campos a actualizar
+        const fieldsToUpdate: any = {};
+        if (updates.document_id && updates.document_id.trim() !== '') {
+            fieldsToUpdate.document_id = updates.document_id.trim();
+        }
+        if (updates.name && updates.name.trim() !== '') {
+            fieldsToUpdate.name = updates.name.trim();
+        }
+        if (updates.email && updates.email.trim() !== '') {
+            fieldsToUpdate.email = updates.email.trim();
+        }
+        if (updates.phone_number && updates.phone_number.trim() !== '') {
+            const cleanPhone = updates.phone_number.replace(/\D/g, '');
+            if (cleanPhone.startsWith('57')) {
+                fieldsToUpdate.phone_number = `+${cleanPhone}`;
+            } else if (cleanPhone.startsWith('3')) {
+                fieldsToUpdate.phone_number = `+57${cleanPhone}`;
+            } else {
+                fieldsToUpdate.phone_number = `+57${cleanPhone}`;
+            }
+        }
+
+        if (Object.keys(fieldsToUpdate).length === 0) {
+            return JSON.stringify({
+                success: false,
+                message: 'No se proporcionaron datos válidos para actualizar.'
+            });
+        }
+
+        // Actualizar en la base de datos
+        const { data: updatedData, error: updateError } = await supabase
+            .from('dentix_clients')
+            .update(fieldsToUpdate)
+            .eq('id', clientData.id)
+            .select();
+
+        if (updateError) {
+            console.error('❌ Error actualizando cliente:', updateError);
+            return JSON.stringify({
+                success: false,
+                message: `Error al actualizar los datos: ${updateError.message}`
+            });
+        }
+
+        console.log('✅ Datos del cliente actualizados exitosamente para vida deudor');
+        const updatedClient = updatedData[0];
+
+        return JSON.stringify({
+            success: true,
+            action: 'vida_deudor_data_updated',
+            updatedData: {
+                document_id: updatedClient.document_id || 'No registrado',
+                name: updatedClient.name,
+                email: updatedClient.email,
+                phone_number: updatedClient.phone_number
+            },
+            message: `✅ Datos actualizados correctamente:
+
+📋 **Cédula:** ${updatedClient.document_id || 'No registrado'}
+👤 **Nombre:** ${updatedClient.name}
+📱 **Celular:** ${updatedClient.phone_number}
+📧 **Correo electrónico:** ${updatedClient.email}
+
+¡Perfecto! Ahora puedes proceder con la activación de tu asistencia Vida Deudor.`
+        });
+
+    } catch (error: any) {
+        console.error('❌ Error en updateVidaDeudorClientData:', error);
+        return JSON.stringify({
+            success: false,
+            message: `Error interno: ${error.message}`
+        });
+    }
+}
+
+/**
  * Busca información en los documentos de Bienestar Plus SOLO EN SUPABASE
  * @param query - La consulta del usuario
  * @returns Resultados formateados de la búsqueda
@@ -765,4 +972,67 @@ export function extractBienestarSection(content: string, type: 'precio'|'cobertu
     if (type === 'precio' && foundMonto && l.trim() === '' && lines[j+1] && lines[j+1].trim() === '') break;
   }
   return extracted.trim();
+}
+
+/**
+ * Envía un correo de activación para la asistencia Vida Deudor
+ * @param clientName - Nombre del cliente
+ * @param clientEmail - Correo electrónico del cliente
+ * @returns Resultado de la operación
+ */
+export async function sendVidaDeudorActivationEmail(clientName: string, clientEmail: string): Promise<string> {
+    console.log(`📧 Intentando enviar correo de activación de Vida Deudor a ${clientName} (${clientEmail})`);
+
+    const emailContent = `
+        Hola ${clientName},        ¡Excelentes noticias! Tu asistencia Vida Deudor ha sido activada exitosamente.
+
+        Como cliente especial de Coltefinanciera, disfrutarás de 3 meses completamente gratis de cobertura.
+
+        Tu asistencia incluye:
+        • Teleconsulta medicina general (2 eventos por año)
+        • Telenutrición ilimitada
+        • Telepsicología (2 eventos por año)
+        • Descuentos ilimitados en farmacias
+
+        Tu cobertura está activa desde este momento y no requiere ningún pago adicional durante los primeros 3 meses.
+
+        Gracias por confiar en Coltefinanciera Seguros.
+
+        Saludos,
+        Lucia
+        Asesora de Seguros
+    `;
+
+    const msg = {
+        to: clientEmail,
+        from: 'grow@ultimmarketing.com',
+        subject: '✅ Tu Asistencia Vida Deudor ha sido activada',
+        text: emailContent,
+        html: emailContent.replace(/\n/g, '<br>'),
+    };
+
+    if (!process.env.SENDGRID_API_KEY) {
+        return JSON.stringify({
+            success: false,
+            message: 'Error: El servicio de correo no está configurado (falta SENDGRID_API_KEY).'
+        });
+    }
+
+    try {
+        await sgMail.send(msg);
+        console.log(`✅ Correo de activación de Vida Deudor enviado exitosamente a ${clientEmail}`);
+        return JSON.stringify({
+            success: true,
+            message: `Correo de activación enviado exitosamente a ${clientEmail}. Tu asistencia Vida Deudor está ahora activa con 3 meses gratis.`
+        });
+    } catch (error: any) {
+        console.error('❌ Error al enviar el correo de activación con SendGrid:', error);
+        if (error.response) {
+            console.error(error.response.body);
+        }
+        return JSON.stringify({
+            success: false,
+            message: `Error al enviar el correo de activación: ${error.message}`
+        });
+    }
 }
