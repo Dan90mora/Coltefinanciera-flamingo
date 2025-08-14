@@ -41,3 +41,6 @@ verify_*
 
 # Documentación markdown (no indispensable para funcionamiento del agente)
 *.md
+
+# Scripts de verificación y diagnóstico (no indispensables para producción)
+check_*

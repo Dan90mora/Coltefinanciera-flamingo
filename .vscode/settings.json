@@ -1,15 +1,18 @@
 {
   "files.exclude": {
     "**/test_*": true,
-    "**/*.md": true
+    "**/*.md": true,
+    "**/check_*": true
   },
   "search.exclude": {
     "**/test_*": true,
-    "**/*.md": true
+    "**/*.md": true,
+    "**/check_*": true
   },
   "files.watcherExclude": {
     "**/test_*": true,
-    "**/*.md": true
+    "**/*.md": true,
+    "**/check_*": true
   },
   "workbench.editor.restoreViewState": false,
   "workbench.editor.enablePreview": true,
