@@ -18,7 +18,7 @@ const luciaServiceAgent = createReactAgent({
         consultCredintegralSpecialistTool,
         consultVidaDeudorSpecialistTool,
         consultBienestarSpecialistTool, // <-- Nueva herramienta para Bienestar Plus
-        consultInsuranceSpecialistTool,
+        //consultInsuranceSpecialistTool,
         searchDentixClientTool,
         extractPhoneNumberTool,
         registerDentixClientTool, // <-- Agregamos la herramienta de registro

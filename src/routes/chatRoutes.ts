@@ -48,9 +48,9 @@ const storage = getStorage();
 
 const createAudioStreamFromText = async (text: string): Promise<Buffer> => {
     const audioStream = await elevenlabsClient.generate({
-        voice: "Andrea",
-        model_id: "eleven_flash_v2_5",
-        text,
+      voice: "GO3JA3hIYgix20rA5CvN",
+      model_id: "eleven_multilingual_v2",
+      text,
     });
   
     const chunks: Buffer[] = [];
@@ -260,11 +260,30 @@ router.post("/api/whatsapp", async (req, res) => {
       //consultar si esta disponible para audios
       const isAvailableForAudio = await getAvailableForAudio(fromNumber);
 
-      // Si la respuesta es menor a 400 caracteres && no contiene números, hacer TTS y enviar el audio
+      // 🔍 LOGGING DIAGNÓSTICO DETALLADO
+      console.log('===== DIAGNÓSTICO AUDIO SYSTEM =====');
+      console.log('📞 Número cliente:', fromNumber);
+      console.log('📝 Mensaje respuesta:', responseMessage);
+      console.log('📏 Longitud mensaje:', responseMessage.length);
+      console.log('🔢 Contiene números:', /\d/.test(responseMessage));
+      console.log('🔤 Contiene siglas:', !/\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage));
+      console.log('🎵 Palabra "audio" en respuesta:', responseMessage.toLowerCase().includes('audio'));
+      console.log('🎙️ Cliente disponible para audio (DB):', isAvailableForAudio);
+      console.log('✅ ¿Pasará a audio?:', 
+        responseMessage.length <= 400 && 
+        !/\d/.test(responseMessage) && 
+        !/\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage) && 
+        !responseMessage.toLowerCase().includes('audio') &&
+        isAvailableForAudio
+      );
+      console.log('=====================================');
+
+      // Si la respuesta es menor a 400 caracteres && no contiene números && no menciona "audio", hacer TTS y enviar el audio
       if (
         responseMessage.length <= 400 && // Menor a 400 caracteres
         !/\d/.test(responseMessage) && // No contiene números
         !/\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage) && // No contiene siglas
+        !responseMessage.toLowerCase().includes('audio') && // 🚫 NUEVA CONDICIÓN: No menciona "audio"
         isAvailableForAudio // El cliente puede recibir audios
       ) {
         console.log('Entró a enviar audio');
@@ -291,7 +310,7 @@ router.post("/api/whatsapp", async (req, res) => {
               const audioUrl = await getDownloadURL(uploadTask.snapshot.ref);
               // Envía el archivo de audio a través de Twilio
               await client.messages.create({
-                body: "Audio message",
+                //body: "Audio message",
                 from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
                 to: `whatsapp:${fromNumber}`,
                 mediaUrl: [audioUrl],

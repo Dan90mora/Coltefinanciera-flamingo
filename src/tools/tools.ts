@@ -3,10 +3,10 @@ import { StructuredTool, tool } from "@langchain/core/tools";
 import { z } from "zod";
 //import { contactCustomerService, getProductInfo, troubleshootIssue, getInsuranceInfo, searchDentixDocuments, searchCredintegralDocuments, searchBienestarDocuments, searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail, confirmAndUpdateClientData } from "../functions/functions";
 import {
-  troubleshootIssue,
-  getInsuranceInfo,
-  searchDentixDocuments,
-  searchCredintegralDocuments,
+  //troubleshootIssue,
+  //getInsuranceInfo,
+  //searchDentixDocuments,
+  //searchCredintegralDocuments,
   searchBienestarDocuments,
   searchDentixClientByPhone,
   registerDentixClient,
@@ -39,7 +39,7 @@ export const extractPhoneNumberTool = tool(
     }
 );
 
-export const troubleshootIssueTool = tool(
+/*export const troubleshootIssueTool = tool(
     async ({ issue }: { issue: string }) => {
       const diagnostic = troubleshootIssue(issue);
       return diagnostic;
@@ -51,9 +51,9 @@ export const troubleshootIssueTool = tool(
         issue: z.string(),
       }),
     }
-);
+);*/
 
-export const getInsuranceInfoTool = tool(
+/*export const getInsuranceInfoTool = tool(
     async ({ insuranceType }: { insuranceType: "hogar" | "comercial" | "equipos" | "responsabilidad civil" }) => {
       const insuranceInfo = getInsuranceInfo(insuranceType);
       return insuranceInfo;
@@ -70,9 +70,9 @@ export const getInsuranceInfoTool = tool(
         ]),
       }),
     }
-);
+);*/
 
-export const searchDentixDocumentsTool = tool(
+/*export const searchDentixDocumentsTool = tool(
     async ({ query }: { query: string }) => {
       const searchResults = await searchDentixDocuments(query);
       return searchResults;
@@ -84,9 +84,9 @@ export const searchDentixDocumentsTool = tool(
         query: z.string().describe("La consulta o pregunta del usuario para buscar en los documentos de Dentix"),
       }),
     }
-);
+);*/
 
-export const searchCredintegralDocumentsTool = tool(
+/*export const searchCredintegralDocumentsTool = tool(
     async ({ query }: { query: string }) => {
       const searchResults = await searchCredintegralDocuments(query);
       return searchResults;
@@ -98,7 +98,7 @@ export const searchCredintegralDocumentsTool = tool(
         query: z.string().describe("La consulta o pregunta del usuario para buscar en los documentos de Credintegral"),
       }),
     }
-);
+);*/
 
 export const searchDentixClientTool = tool(
     async ({ phoneNumber }: { phoneNumber: string }) => {
@@ -244,7 +244,7 @@ export const consultCredintegralSpecialistTool = tool(    async ({ customerQuery
     }
 );
 
-export const consultInsuranceSpecialistTool = tool(
+/*export const consultInsuranceSpecialistTool = tool(
     async ({ customerQuery }: { customerQuery: string }) => {
       console.log(`🏠 Lucia consulta al especialista Insurance (sin archivos locales): ${customerQuery}`);
       
@@ -302,7 +302,7 @@ export const consultInsuranceSpecialistTool = tool(
         customerQuery: z.string().describe("La consulta específica del cliente sobre seguros de hogar/equipos que necesita respuesta especializada"),
       }),
     }
-);
+);*/
 
 export const registerDentixClientTool = tool(
   async ({ name, email, phone_number, service }: { name: string; email: string; phone_number: string; service: string }) => {

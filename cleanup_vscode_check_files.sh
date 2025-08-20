@@ -30,10 +30,18 @@ if [ -d "$VSCODE_DIR" ]; then
     find "$VSCODE_DIR" -name "*.tmp" -delete 2>/dev/null || true
 fi
 
-# 3. Limpiar cache de VS Code (si está en ubicaciones conocidas)
-echo "🗑️ Limpiando cache de VS Code..."
-rm -rf ~/.config/Code/User/workspaceStorage/*/workspace.json 2>/dev/null || true
+# 3. Limpiar cache de VS Code COMPLETAMENTE (limpieza agresiva)
+echo "🗑️ Limpiando cache de VS Code COMPLETAMENTE..."
+rm -rf ~/.config/Code/User/workspaceStorage/* 2>/dev/null || true
 rm -rf ~/.config/Code/CachedExtensions/* 2>/dev/null || true
+rm -rf ~/.config/Code/logs/* 2>/dev/null || true
+rm -rf ~/.config/Code/User/History/* 2>/dev/null || true
+rm -rf ~/.config/Code/User/state* 2>/dev/null || true
+rm -rf ~/.vscode/extensions/.obsolete 2>/dev/null || true
+
+# 3.1. Limpiar configuraciones específicas del workspace
+WORKSPACE_HASH=$(echo "$WORKSPACE_PATH" | md5sum | cut -d' ' -f1)
+rm -rf ~/.config/Code/User/workspaceStorage/*${WORKSPACE_HASH}* 2>/dev/null || true
 
 # 4. Forzar git a olvidar archivos check_* si estaban siendo rastreados
 echo "🔄 Actualizando índice de Git..."

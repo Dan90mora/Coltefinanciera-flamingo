@@ -11,8 +11,10 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
 
 // Función para consultar si una persona esta disponible para mandarle audios
-export async function getAvailableForAudio(clientNumber: string,) {
+export async function getAvailableForAudio(clientNumber: string): Promise<boolean> {
     try {
+        console.log('🔍 Consultando disponibilidad de audio para:', clientNumber);
+        
         // Verificar si el cliente ya tiene un chat
         const { data: existingChat, error: fetchError } = await supabase
             .from('chat_history')
@@ -21,15 +23,21 @@ export async function getAvailableForAudio(clientNumber: string,) {
             .single();
 
         if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116: No rows found
+            console.error('❌ Error consultando DB audio:', fetchError.message);
             throw new Error(`Error fetching data: ${fetchError.message}`);
         }    
 
         if (existingChat) {
-            return existingChat.audio
-        } 
+            console.log('✅ Cliente encontrado en DB, audio habilitado:', existingChat.audio);
+            return existingChat.audio || true; // Si es null/undefined, default a true
+        } else {
+            console.log('🆕 Cliente nuevo, habilitando audio por defecto');
+            return true; // Por defecto, nuevos clientes pueden recibir audio
+        }
 
     } catch (error) {
-        console.error(error);
+        console.error('❌ Error en getAvailableForAudio:', error);
+        return true; // En caso de error, permitir audio por defecto
     }
 }
 
