@@ -27,7 +27,25 @@ dotenv.config();
 const MessagingResponse = twilio.twiml.MessagingResponse;
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioWhatsAppNumber = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+5742044840";
 const client = twilio(accountSid, authToken);
+
+// Función para verificar configuración de Twilio
+const verifyTwilioConfig = () => {
+  console.log("🔧 VERIFICACIÓN CONFIGURACIÓN TWILIO:");
+  console.log("  🔑 Account SID:", accountSid ? `${accountSid.substring(0, 10)}...` : '❌ NO CONFIGURADO');
+  console.log("  🔐 Auth Token:", authToken ? `${authToken.substring(0, 10)}...` : '❌ NO CONFIGURADO');
+  console.log("  📞 WhatsApp Number:", twilioWhatsAppNumber);
+  
+  if (!accountSid || !authToken) {
+    console.error("❌ CONFIGURACIÓN INCOMPLETA DE TWILIO - Verifica las variables de entorno");
+    return false;
+  }
+  return true;
+};
+
+// Verificar configuración al cargar el módulo
+verifyTwilioConfig();
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -329,18 +347,59 @@ router.post("/seguros/whatsapp", async (req, res) => {
             },
             async () => {
               // Subida completada
-              const audioUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              // Envía el archivo de audio a través de Twilio
-              await client.messages.create({
-                //body: "Audio message",
-                // from: "whatsapp:+14155238886",
-                from: "whatsapp:+5742044840",
-                to: `whatsapp:${fromNumber}`,
-                mediaUrl: [audioUrl],
-              });
-              console.log("Audio message sent successfully");
-              res.writeHead(200, { "Content-Type": "text/xml" });
-              res.end(twiml.toString());
+              try {
+                const audioUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                
+                console.log("🎵 AUDIO SYSTEM - Preparando envío de audio:");
+                console.log("  📁 Audio URL:", audioUrl);
+                console.log("  📞 From:", twilioWhatsAppNumber);
+                console.log("  📱 To:", `whatsapp:${fromNumber}`);
+                console.log("  🔑 Account SID:", accountSid ? `${accountSid.substring(0, 10)}...` : 'NO CONFIGURADO');
+                
+                // Envía el archivo de audio a través de Twilio
+                const audioMessage = await client.messages.create({
+                  //body: "Audio message",
+                  // from: "whatsapp:+14155238886",
+                  from: twilioWhatsAppNumber,
+                  to: `whatsapp:${fromNumber}`,
+                  mediaUrl: [audioUrl],
+                });
+                console.log("✅ Audio message sent successfully, SID:", audioMessage.sid);
+                res.writeHead(200, { "Content-Type": "text/xml" });
+                res.end(twiml.toString());
+              } catch (twilioError: any) {
+                console.error("❌ ERROR DETALLADO TWILIO AUDIO:", {
+                  error: twilioError?.message || 'Unknown error',
+                  code: twilioError?.code || 'No code',
+                  status: twilioError?.status || 'No status',
+                  details: twilioError?.details || 'No details',
+                  from: twilioWhatsAppNumber,
+                  to: `whatsapp:${fromNumber}`
+                });
+                
+                // Enviar mensaje de texto como fallback
+                try {
+                  console.log("🔄 Intentando fallback con mensaje de texto...");
+                  const fallbackMessage = await client.messages.create({
+                    body: responseMessage,
+                    from: twilioWhatsAppNumber,
+                    to: `whatsapp:${fromNumber}`,
+                  });
+                  console.log("✅ Fallback text message sent successfully, SID:", fallbackMessage.sid);
+                } catch (fallbackError: any) {
+                  console.error("❌ ERROR DETALLADO TWILIO FALLBACK:", {
+                    error: fallbackError?.message || 'Unknown error',
+                    code: fallbackError?.code || 'No code',
+                    status: fallbackError?.status || 'No status',
+                    details: fallbackError?.details || 'No details',
+                    from: twilioWhatsAppNumber,
+                    to: `whatsapp:${fromNumber}`
+                  });
+                  twiml.message("Lo siento, ocurrió un error técnico. Por favor, intenta nuevamente.");
+                }
+                res.writeHead(200, { "Content-Type": "text/xml" });
+                res.end(twiml.toString());
+              }
             }
           );
         } catch (error) {
@@ -358,27 +417,54 @@ router.post("/seguros/whatsapp", async (req, res) => {
           // eslint-disable-next-line prefer-const
           for (let part of messageParts) {
             if (part !== "") {
-              await client.messages.create({
-                body: part,
-                // from: "whatsapp:+14155238886",
-                from: "whatsapp:+5742044840",
-                to: `whatsapp:${fromNumber}`,
-              });
+              try {
+                console.log("📤 ENVÍO MENSAJE LARGO - Parte:", part.substring(0, 50) + "...");
+                console.log("  📞 From:", twilioWhatsAppNumber);
+                console.log("  📱 To:", `whatsapp:${fromNumber}`);
+                
+                const partMessage = await client.messages.create({
+                  body: part,
+                  // from: "whatsapp:+14155238886",
+                  from: twilioWhatsAppNumber,
+                  to: `whatsapp:${fromNumber}`,
+                });
+                console.log("✅ Parte del mensaje enviada, SID:", partMessage.sid);
+              } catch (partError: any) {
+                console.error("❌ ERROR ENVIANDO PARTE DEL MENSAJE:", {
+                  error: partError?.message || 'Unknown error',
+                  code: partError?.code || 'No code',
+                  part: part.substring(0, 100) + "...",
+                  from: twilioWhatsAppNumber,
+                  to: `whatsapp:${fromNumber}`
+                });
+              }
               console.log(part);
               console.log("-------------------");
             }
           }
         } else {
           try {
+            console.log("📤 ENVÍO MENSAJE NORMAL:");
+            console.log("  📝 Mensaje:", responseMessage.substring(0, 100) + (responseMessage.length > 100 ? "..." : ""));
+            console.log("  📞 From:", twilioWhatsAppNumber);
+            console.log("  📱 To:", `whatsapp:${fromNumber}`);
+            
             const message = await client.messages.create({
               body: responseMessage,
               // from: "whatsapp:+14155238886",
-              from: "whatsapp:+5742044840",
+              from: twilioWhatsAppNumber,
               to: `whatsapp:${fromNumber}`,
             });
-            console.log("Message sent successfully:", message.sid);
-          } catch (error) {
-            console.error("Error sending message:", error);
+            console.log("✅ Message sent successfully, SID:", message.sid);
+          } catch (error: any) {
+            console.error("❌ ERROR DETALLADO TWILIO MENSAJE NORMAL:", {
+              error: error?.message || 'Unknown error',
+              code: error?.code || 'No code',
+              status: error?.status || 'No status',
+              from: twilioWhatsAppNumber,
+              to: `whatsapp:${fromNumber}`,
+              messageLength: responseMessage.length
+            });
           }
         }
 
@@ -468,7 +554,7 @@ router.post('/seguros/chat-dashboard', async (req, res) => {
             body: "Audio message",
             to: `whatsapp:${clientNumber}`,
             // from: "whatsapp:+14155238886",
-            from: "whatsapp:+5742044840",
+            from: twilioWhatsAppNumber,
             mediaUrl: [audioUrl],
           });
           // Limpiar archivos temporales
@@ -486,7 +572,7 @@ router.post('/seguros/chat-dashboard', async (req, res) => {
         body: 'Mensaje con archivo',
         to: `whatsapp:${clientNumber}`,
         // from: "whatsapp:+14155238886",
-        from: "whatsapp:+5742044840",
+        from: twilioWhatsAppNumber,
         mediaUrl: [newMessage],
       });
       console.log('File message sent successfully:', message.sid);
@@ -497,7 +583,7 @@ router.post('/seguros/chat-dashboard', async (req, res) => {
       // Enviar mensaje a través de Twilio
       const message = await client.messages.create({
         // from: "whatsapp:+14155238886",
-        from: "whatsapp:+5742044840",
+        from: twilioWhatsAppNumber,
         to: `whatsapp:${clientNumber}`,
         body: newMessage
       });
