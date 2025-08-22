@@ -140,7 +140,7 @@ export const consultDentixSpecialistTool = tool(
       console.log(`🦷 Lucia consulta al especialista Dentix (SOLO Supabase): ${customerQuery}`);
         // Consultar ÚNICAMENTE la base vectorial de Supabase para Dentix
       try {
-        const { searchDentixVectors } = await import('../functions/retrievers');
+        const { searchDentixVectors } = await import('../functions/retrievers.js');
         const vectorResults = await searchDentixVectors(customerQuery);
         
         if (!vectorResults || vectorResults.length === 0) {
@@ -189,7 +189,7 @@ export const consultCredintegralSpecialistTool = tool(    async ({ customerQuery
       
       // Consultar ÚNICAMENTE la base vectorial de Supabase para Credintegral
       try {
-        const { searchCredintegralVectors } = await import('../functions/retrievers');
+        const { searchCredintegralVectors } = await import('../functions/retrievers.js');
           // Si es una consulta sobre cobertura, buscar específicamente con términos relacionados
         let searchQuery = customerQuery;
         if (isCoverageQuery) {
@@ -399,7 +399,7 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
         }
         
         // 🎯 NUEVA LÓGICA SIMPLIFICADA: TODO de la BD = ESPECÍFICO, Sin BD = GENERAL con contactos
-        const { searchVidaDeudorVectors } = await import('../functions/retrievers');
+        const { searchVidaDeudorVectors } = await import('../functions/retrievers.js');
         const vectorResults = await searchVidaDeudorVectors(customerQuery);
           if (vectorResults && vectorResults.length > 0) {
           console.log('✅ [INFORMACIÓN ENCONTRADA] Procesando resultados de asistenciavida_documents');
@@ -520,8 +520,8 @@ export const consultBienestarSpecialistTool = tool(
       const isBenefitQuery = /beneficio|beneficios|ventajas/i.test(customerQuery);
       const isAssistQuery = /asistencial|asistenciales|asistencia/i.test(customerQuery);
       try {
-        const { searchBienestarVectors } = await import('../functions/retrievers');
-        const { extractBienestarSection } = await import('../functions/functions');
+        const { searchBienestarVectors } = await import('../functions/retrievers.js');
+        const { extractBienestarSection } = await import('../functions/functions.js');
         let searchQuery = customerQuery;
         // Si es consulta de precio/costo/valor/tarifa, forzar búsqueda por 'tarifa'
         if (isPriceQuery) {
@@ -613,7 +613,7 @@ export const consultBienestarSpecialistTool = tool(
 
 export const sendVidaDeudorActivationEmailTool = tool(
   async ({ clientName, clientEmail }: { clientName: string; clientEmail: string; }) => {
-    const { sendVidaDeudorActivationEmail } = await import('../functions/functions');
+    const { sendVidaDeudorActivationEmail } = await import('../functions/functions.js');
     const result = await sendVidaDeudorActivationEmail(clientName, clientEmail);
     return result;
   },
@@ -631,7 +631,7 @@ export const showVidaDeudorClientDataTool = tool(
   async ({ phoneNumber }: { phoneNumber: string }) => {
     console.log(`🛡️ [VIDA DEUDOR] Tool: Mostrando datos para confirmación - Cliente: ${phoneNumber}`);
     
-    const { showVidaDeudorClientDataForConfirmation } = await import('../functions/functions');
+    const { showVidaDeudorClientDataForConfirmation } = await import('../functions/functions.js');
     const result = await showVidaDeudorClientDataForConfirmation(phoneNumber);
     console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
     return result;
@@ -653,7 +653,7 @@ export const updateVidaDeudorClientDataTool = tool(
     console.log(`🛡️ [VIDA DEUDOR] Tool: Actualizando datos del cliente: ${phoneNumber}`);
     console.log(`✏️ Tool: Actualizaciones solicitadas:`, updates);
     
-    const { updateVidaDeudorClientData } = await import('../functions/functions');
+    const { updateVidaDeudorClientData } = await import('../functions/functions.js');
     const result = await updateVidaDeudorClientData(phoneNumber, updates);
     console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
     return result;
