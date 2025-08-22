@@ -39,6 +39,7 @@ export const luciaServiceNode = async (
     const phoneNumber = config?.configurable?.phone_number;
 
     // Identificación del cliente basada en el número de teléfono del remitente
+    // SOLO se hace en el primer mensaje (cuando no está identificado)
     if (phoneNumber && !state.isClientIdentified) {
       try {
         const clientInfoString = await searchDentixClientTool.invoke({ phoneNumber });
@@ -51,28 +52,30 @@ export const luciaServiceNode = async (
             // Cliente existente con vida deudor: informar sobre beneficio especial
             const productInfo = clientInfo.product ? `por haber adquirido tu ${clientInfo.product}` : 'por ser cliente y tener un servicio/crédito';
             
-            greeting = `CLIENTE IDENTIFICADO - VIDA DEUDOR CON BENEFICIO ESPECIAL: ${clientInfo.name} ya está registrado y tiene derecho a la asistencia Vida Deudor ${productInfo} con nosotros.
+            greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE ÚNICAMENTE: ${clientInfo.name} ya está registrado y tiene derecho a la asistencia Vida Deudor ${productInfo} con nosotros.
 
-DATOS DEL CLIENTE:
+DATOS DEL CLIENTE (SOLO PARA PRIMERA INTERACCIÓN):
 - Nombre: ${clientInfo.name}
 - Teléfono: ${phoneNumber}
 - Servicio: ${clientInfo.service}
 - Producto: ${clientInfo.product || 'No especificado'}
 
-INSTRUCCIONES ESPECÍFICAS:
+INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
 
-1. **SALUDO PERSONALIZADO:** Salúdalo por su nombre de manera cálida
-2. **BENEFICIO ESPECIAL CON PRODUCTO:** Infórmale que ${productInfo} con nosotros, tiene derecho a la asistencia Vida Deudor
-3. **IMPORTANTE:** Si tiene 'product', usa el nombre EXACTO del producto (${clientInfo.product}) en tu respuesta, NO uses palabras genéricas
+1. **SALUDO PERSONALIZADO:** Salúdalo por su nombre de manera cálida (SOLO EN ESTE PRIMER MENSAJE)
+2. **BENEFICIO ESPECIAL CON PRODUCTO:** Infórmale que ${productInfo} con nosotros, tiene derecho a la asistencia Vida Deudor (SOLO EN ESTE PRIMER MENSAJE)
+3. **IMPORTANTE:** Si tiene 'product', usa el nombre EXACTO del producto (${clientInfo.product}) en tu respuesta, NO uses palabras genéricas (SOLO EN ESTE PRIMER MENSAJE)
 4. **TERMINOLOGÍA:** SIEMPRE usa "asistencia Vida Deudor" NO "seguro Vida Deudor" 
 5. **MENSAJE INICIAL:** Menciona que tiene derecho a activar este beneficio y describe brevemente los servicios incluidos (teleconsulta, telenutrición, telepsicología, descuentos en farmacias) sin mencionar meses gratis
 6. **PRECIO ESPECIAL:** Solo si pregunta específicamente por precio, entonces menciona los 3 meses gratis
 7. **PROCESO DE ACTIVACIÓN INMEDIATA:** Si menciona "quiero activar", "activar", "proceder", "adquirir" - usa INMEDIATAMENTE showVidaDeudorClientDataTool con el número ${phoneNumber} (NO preguntes nada más)
 
-TONO: Personalizado, beneficioso, destacando que es un cliente especial con ventajas exclusivas por su producto específico.`;
+IMPORTANTE: En mensajes posteriores de esta misma conversación, NO repitas su nombre ni el producto constantemente. Manténte natural y directo sin mencionar información personal repetitivamente.
+
+TONO: Personalizado y beneficioso en el primer mensaje, natural y directo en mensajes siguientes.`;
           } else {
             // Cliente existente con otros servicios
-            greeting = `El cliente ha sido identificado a partir de su número de teléfono (${phoneNumber}): ${JSON.stringify(clientInfo)}. Salúdalo por su nombre (${clientInfo.name}) y, como tiene el servicio '${clientInfo.service}', procede a consultar al especialista adecuado.`;
+            greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE: El cliente ha sido identificado (${phoneNumber}): ${JSON.stringify(clientInfo)}. Salúdalo por su nombre (${clientInfo.name}) en este primer mensaje y procede a consultar al especialista adecuado. En mensajes posteriores, mantente natural sin repetir constantemente su información personal.`;
           }
           
           state.messages.push(new HumanMessage({ content: greeting, name: "system-notification" }));
