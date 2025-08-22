@@ -5,7 +5,7 @@ import { RunnableConfig } from "@langchain/core/runnables";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
 import { AgentState } from "./agentState";
-import { searchDentixDocumentsTool, searchDentixClientTool } from "../tools/tools";
+import { searchDentixClientTool } from "../tools/tools";
 import { llm } from "../config/llm";
 import { MESSAGES } from '../config/constants';
 
@@ -13,7 +13,7 @@ dotenv.config();
 
 const dentixServiceAgent = createReactAgent({
     llm,
-    tools: [ searchDentixDocumentsTool, searchDentixClientTool ],
+    tools: [ searchDentixClientTool ],
     stateModifier: new SystemMessage(MESSAGES.SYSTEM_DENTIX_PROMPT)
 })
   

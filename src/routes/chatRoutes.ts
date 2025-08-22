@@ -72,10 +72,10 @@ let globalConfig = {
 };
 
 // Endpoint específico para webhook de WhatsApp con ngrok
-router.post("/api/whatsapp", async (req, res) => {
+router.post("/seguros/whatsapp", async (req, res) => {
   res.setHeader("ngrok-skip-browser-warning", "true");
 
-  console.log("Webhook received at /api/whatsapp:", req.body);
+  console.log("Webhook received at /seguros/whatsapp:", req.body);
   console.log("Headers:", req.headers);
 
   const twiml = new MessagingResponse();
@@ -120,6 +120,10 @@ router.post("/api/whatsapp", async (req, res) => {
             'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
           }
         });
+
+        if (!response.body) {
+          throw new Error('No se pudo obtener el contenido del audio');
+        }
 
         const file = await toFile(response.body, 'recording.wav');
 
@@ -393,6 +397,11 @@ router.post("/api/whatsapp", async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/xml' });
     res.end(twiml.toString());
   }
+});
+
+// Ruta Health Check
+router.get('/seguros/health', async (req, res) => {
+  res.status(200).json({ success: true, message: 'API is healthy - Seguros' });
 });
 
 export default router;
