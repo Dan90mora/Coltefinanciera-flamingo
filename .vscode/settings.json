@@ -2,24 +2,27 @@
   "files.exclude": {
     "**/test_*": true,
     "**/*.md": true,
-    "**/check_*": true
+    "**/check_*": true,
+    "**/cleanup_vscode_*": true
   },
   "search.exclude": {
     "**/test_*": true,
     "**/*.md": true,
-    "**/check_*": true
+    "**/check_*": true,
+    "**/cleanup_vscode_*": true
   },
   "files.watcherExclude": {
     "**/test_*": true,
     "**/*.md": true,
-    "**/check_*": true
+    "**/check_*": true,
+    "**/cleanup_vscode_*": true
   },
   "workbench.editor.restoreViewState": false,
   "workbench.editor.enablePreview": true,
   "workbench.editor.enablePreviewFromQuickOpen": true,
   "workbench.editor.closeEmptyGroups": true,
-  "explorer.autoReveal": false,
-  "files.hotExit": "off",
   "workbench.editor.closeOnFileDelete": true,
+  "files.hotExit": "off",
+  "explorer.autoReveal": false,
   "workbench.editor.revealIfOpen": true
 }

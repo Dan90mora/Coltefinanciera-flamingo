@@ -44,3 +44,6 @@ verify_*
 
 # Scripts de verificación y diagnóstico (no indispensables para producción)
 check_*
+
+# Scripts de limpieza de VS Code (eliminados permanentemente)
+cleanup_vscode_*
