@@ -2,9 +2,9 @@ import dotenv from "dotenv";
 import { HumanMessage } from "@langchain/core/messages";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
-// import { getInsuranceInfoTool } from "../tools/tools";
-import { llm } from "../config/llm";
-import { MESSAGES } from '../config/constants';
+// import { getInsuranceInfoTool } from "../tools/tools.js";
+import { llm } from "../config/llm.js";
+import { MESSAGES } from '../config/constants.js';
 dotenv.config();
 const insuranceServiceAgent = createReactAgent({
     llm,

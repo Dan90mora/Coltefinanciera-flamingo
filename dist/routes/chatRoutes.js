@@ -10,10 +10,10 @@ import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/
 import { ElevenLabsClient } from 'elevenlabs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { saveChatHistory } from "../utils/saveHistoryDb";
-import { getAvailableChatOn } from "../utils/getAvailableChatOn";
-import { getAvailableForAudio } from "../utils/getAvailableForAudio";
-import { graph } from "../supervisor";
+import { saveChatHistory } from "../utils/saveHistoryDb.js";
+import { getAvailableChatOn } from "../utils/getAvailableChatOn.js";
+import { getAvailableForAudio } from "../utils/getAvailableForAudio.js";
+import { graph } from "../supervisor.js";
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -265,7 +265,8 @@ router.post("/seguros/whatsapp", async (req, res) => {
                         // Envía el archivo de audio a través de Twilio
                         await client.messages.create({
                             //body: "Audio message",
-                            from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
+                            // from: "whatsapp:+14155238886",
+                            from: "whatsapp:+5742044840",
                             to: `whatsapp:${fromNumber}`,
                             mediaUrl: [audioUrl],
                         });
@@ -291,7 +292,8 @@ router.post("/seguros/whatsapp", async (req, res) => {
                         if (part !== "") {
                             await client.messages.create({
                                 body: part,
-                                from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
+                                // from: "whatsapp:+14155238886",
+                                from: "whatsapp:+5742044840",
                                 to: `whatsapp:${fromNumber}`,
                             });
                             console.log(part);
@@ -303,7 +305,8 @@ router.post("/seguros/whatsapp", async (req, res) => {
                     try {
                         const message = await client.messages.create({
                             body: responseMessage,
-                            from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
+                            // from: "whatsapp:+14155238886",
+                            from: "whatsapp:+5742044840",
                             to: `whatsapp:${fromNumber}`,
                         });
                         console.log("Message sent successfully:", message.sid);

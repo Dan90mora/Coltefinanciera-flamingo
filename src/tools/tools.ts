@@ -12,8 +12,8 @@ import {
   registerDentixClient,
   sendPaymentLinkEmail,
   confirmAndUpdateClientData,
-} from "../functions/functions";
-import { extractPhoneNumber } from "../utils/phoneUtils";
+} from "../functions/functions.js";
+import { extractPhoneNumber } from "../utils/phoneUtils.js";
 
 dotenv.config();
 

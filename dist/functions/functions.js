@@ -1,5 +1,5 @@
 //import colombia from '../data/colombia.json';
-import { searchDentixVectors, searchCredintegralVectors } from './retrievers';
+import { searchDentixVectors, searchCredintegralVectors } from './retrievers.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import sgMail from '@sendgrid/mail';

@@ -3,10 +3,10 @@ import { HumanMessage } from "@langchain/core/messages";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
-import { AgentState } from "./agentState";
-import { consultBienestarSpecialistTool } from "../tools/tools";
-import { llm } from "../config/llm";
-import { MESSAGES } from '../config/constants';
+import { AgentState } from "./agentState.js";
+import { consultBienestarSpecialistTool } from "../tools/tools.js";
+import { llm } from "../config/llm.js";
+import { MESSAGES } from '../config/constants.js';
 
 dotenv.config();
 

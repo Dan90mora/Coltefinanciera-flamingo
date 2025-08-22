@@ -2,8 +2,8 @@ import dotenv from "dotenv";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 //import { contactCustomerService, getProductInfo, troubleshootIssue, getInsuranceInfo, searchDentixDocuments, searchCredintegralDocuments, searchBienestarDocuments, searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail, confirmAndUpdateClientData } from "../functions/functions";
-import { searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail, confirmAndUpdateClientData, } from "../functions/functions";
-import { extractPhoneNumber } from "../utils/phoneUtils";
+import { searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail, confirmAndUpdateClientData, } from "../functions/functions.js";
+import { extractPhoneNumber } from "../utils/phoneUtils.js";
 dotenv.config();
 export const extractPhoneNumberTool = tool(async (input) => {
     console.log(`📞 Tool: Extrayendo número de teléfono del mensaje: "${input.message}"`);
