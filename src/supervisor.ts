@@ -7,6 +7,7 @@ import { MemorySaver } from "@langchain/langgraph";
 import { AgentState } from "./agents/agentState";
 import { dentixServiceNode } from "./agents/dentixServiceAgent";
 import { credintegralServiceNode } from "./agents/credintegralServiceAgent";
+import { vidaDeudorServiceNode } from "./agents/vidaDeudorAgent";
 import { insuranceServiceNode } from "./agents/insuranceServiceAgent";
 import { luciaServiceNode } from "./agents/luciaServiceAgent";
 import { llm } from "./config/llm";
@@ -15,7 +16,7 @@ dotenv.config();
 
 const checkpointer = new MemorySaver();
 
-const members = ["lucia_service", "dentix_service", "credintegral_service", "insurance_service"] as const;
+const members = ["lucia_service", "dentix_service", "credintegral_service", "vida_deudor_service", "insurance_service"] as const;
 
 const systemPrompt =
   "You are a supervisor tasked with managing a conversation between the" +

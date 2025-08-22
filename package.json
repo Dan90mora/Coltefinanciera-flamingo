@@ -2,7 +2,8 @@
   "name": "multiagente-node-ts",
   "version": "1.0.0",
   "main": "index.js",
-  "type": "module",  "scripts": {
+  "type": "module",
+  "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "npx tsx src/index.ts",
     "dev": "npx tsx --watch src/index.ts"
@@ -38,6 +39,7 @@
     "firebase": "^10.13.0",
     "google-libphonenumber": "^3.2.42",
     "googleapis": "^146.0.0",
+    "node-fetch": "^3.3.2",
     "nodemailer": "^6.9.16",
     "openai": "^4.104.0",
     "twilio": "^5.2.2",

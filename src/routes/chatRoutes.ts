@@ -48,16 +48,16 @@ const storage = getStorage();
 
 const createAudioStreamFromText = async (text: string): Promise<Buffer> => {
     const audioStream = await elevenlabsClient.generate({
-        voice: "Andrea",
-        model_id: "eleven_flash_v2_5",
-        text,
+      voice: "GO3JA3hIYgix20rA5CvN",
+      model_id: "eleven_multilingual_v2",
+      text,
     });
-  
+
     const chunks: Buffer[] = [];
     for await (const chunk of audioStream) {
       chunks.push(chunk);
     }
-  
+
     const content = Buffer.concat(chunks);
     return content;
 };
@@ -77,7 +77,7 @@ router.post("/api/whatsapp", async (req, res) => {
 
   console.log("Webhook received at /api/whatsapp:", req.body);
   console.log("Headers:", req.headers);
-    
+
   const twiml = new MessagingResponse();
   const from = req.body.From;
   console.log("from prueba", from)
@@ -94,14 +94,14 @@ router.post("/api/whatsapp", async (req, res) => {
   const fromNumberWithoutCountryCode = fromNumber.slice(3); // Número del cliente sin indicativo de país
 
   exportedFromNumber = fromNumber
-  
+
   globalConfig = {
     configurable: {
       thread_id: fromNumber,
       phone_number: fromNumber,
     },
   };
-  
+
   try {
     let incomingMessage;
     let incomingImage;
@@ -163,7 +163,7 @@ router.post("/api/whatsapp", async (req, res) => {
       const uploadImage = () => {
         return new Promise((resolve, reject) => {
           const uploadTask = uploadBytesResumable(storageRef, imageBuffer, metadata);
-        
+
           uploadTask.on('state_changed',
             (snapshot) => {
               // Progreso de la subida (opcional)
@@ -206,7 +206,7 @@ router.post("/api/whatsapp", async (req, res) => {
     // Validar si en el dashboard se encuentra activado el chat
     const chatOn = await getAvailableChatOn(fromNumber);
     // Si chat_on es false, quiero decir que en el dashboard está desactivado, así que acá se manda mensaje por agentOutput
-    
+
     if (!chatOn) {
       // configuración para crear hilos de conversación en el agente y manejar memorias independientes.
       const config = {
@@ -218,10 +218,10 @@ router.post("/api/whatsapp", async (req, res) => {
 
       // 🎯 NUEVA ARQUITECTURA: Toda comunicación pasa por Lucia primero
       console.log('💬 Iniciando conversación con Lucia (supervisor)');
-      
+
       // Crear el estado inicial para el supervisor
       const initialState = {
-        messages: incomingImage ? 
+        messages: incomingImage ?
           [new HumanMessage({
             content: [
               {
@@ -229,7 +229,7 @@ router.post("/api/whatsapp", async (req, res) => {
                 image_url: {url: incomingImage},
               },
             ],
-          })] : 
+          })] :
           [new HumanMessage({ content: incomingMessage })],
         next: "lucia_service" // Lucia siempre es el primer punto de contacto
       };
@@ -238,7 +238,7 @@ router.post("/api/whatsapp", async (req, res) => {
       const agentOutput = await graph.invoke(initialState, config);
 
       const lastMessage = agentOutput.messages[agentOutput.messages.length - 1];
-      
+
       // Respuesta AI
       console.log('Respuesta Completa IA:', agentOutput);
 
@@ -260,28 +260,63 @@ router.post("/api/whatsapp", async (req, res) => {
       //consultar si esta disponible para audios
       const isAvailableForAudio = await getAvailableForAudio(fromNumber);
 
-      // Si la respuesta es menor a 400 caracteres && no contiene números, hacer TTS y enviar el audio
+      // 🔍 LOGGING DIAGNÓSTICO DETALLADO
+      console.log("===== DIAGNÓSTICO AUDIO SYSTEM =====");
+      console.log("📞 Número cliente:", fromNumber);
+      console.log("📝 Mensaje respuesta:", responseMessage);
+      console.log("📏 Longitud mensaje:", responseMessage.length);
+      console.log("🔢 Contiene números:", /\d/.test(responseMessage));
+      console.log("🔤 Contiene siglas:", !/\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage));
+      console.log('🎵 Palabra "audio" en respuesta:', responseMessage.toLowerCase().includes("audio"));
+      console.log("🔗 Contiene URL:", /https?:\/\/[^\s]+|www\.[^\s]+/i.test(responseMessage));
+      console.log("📧 Contiene email:", /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(responseMessage));
+      console.log("🎙️ Cliente disponible para audio (DB):", isAvailableForAudio);
+      console.log(
+        "✅ ¿Pasará a audio?:",
+        responseMessage.length <= 400 &&
+          !/\d/.test(responseMessage) &&
+          !/\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage) &&
+          !responseMessage.toLowerCase().includes("audio") &&
+          !/https?:\/\/[^\s]+|www\.[^\s]+/i.test(responseMessage) &&
+          !/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(
+            responseMessage
+          ) &&
+          isAvailableForAudio
+      );
+      console.log('=====================================');
+
+      // Si la respuesta es menor a 400 caracteres && no contiene números && no menciona "audio", hacer TTS y enviar el audio
       if (
         responseMessage.length <= 400 && // Menor a 400 caracteres
         !/\d/.test(responseMessage) && // No contiene números
         !/\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage) && // No contiene siglas
+        !responseMessage.toLowerCase().includes("audio") && // 🚫 No menciona "audio"
+        !/https?:\/\/[^\s]+|www\.[^\s]+/i.test(responseMessage) && // 🚫 NUEVA CONDICIÓN: No contiene URLs
+        !/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(
+          responseMessage
+        ) && // 🚫 NUEVA CONDICIÓN: No contiene emails
         isAvailableForAudio // El cliente puede recibir audios
       ) {
-        console.log('Entró a enviar audio');
+        console.log("Entró a enviar audio");
         try {
           const audioBuffer = await createAudioStreamFromText(responseMessage);
           const audioName = `${uuidv4()}.wav`;
           // Subir el archivo de audio a Firebase Storage
           const storageRef = ref(storage, `audios/${audioName}`);
           const metadata = {
-            contentType: 'audio/mpeg',
+            contentType: "audio/mpeg",
           };
-          const uploadTask = uploadBytesResumable(storageRef, audioBuffer, metadata);
+          const uploadTask = uploadBytesResumable(
+            storageRef,
+            audioBuffer,
+            metadata
+          );
           // Esperar a que la subida complete y obtener la URL pública
-          uploadTask.on('state_changed',
+          uploadTask.on(
+            "state_changed",
             (snapshot) => {
               // Progreso de la subida (opcional)
-              console.log('Upload is in progress...');
+              console.log("Upload is in progress...");
             },
             (error) => {
               throw new Error(`Upload failed: ${error.message}`);
@@ -291,56 +326,58 @@ router.post("/api/whatsapp", async (req, res) => {
               const audioUrl = await getDownloadURL(uploadTask.snapshot.ref);
               // Envía el archivo de audio a través de Twilio
               await client.messages.create({
-                body: "Audio message",
-                from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
+                //body: "Audio message",
+                from:
+                  process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
                 to: `whatsapp:${fromNumber}`,
                 mediaUrl: [audioUrl],
               });
-              console.log('Audio message sent successfully');
-              res.writeHead(200, { 'Content-Type': 'text/xml' });
+              console.log("Audio message sent successfully");
+              res.writeHead(200, { "Content-Type": "text/xml" });
               res.end(twiml.toString());
             }
           );
         } catch (error) {
-          console.error('Error sending audio message:', error);
+          console.error("Error sending audio message:", error);
           twiml.message(responseMessage);
-          res.writeHead(200, { 'Content-Type': 'text/xml' });
+          res.writeHead(200, { "Content-Type": "text/xml" });
           res.end(twiml.toString());
         }
       } else {
         // Responder con el texto si es mayor de 400 caracteres
         if (responseMessage.length > 1000) {
-          console.log('Response is too long, splitting by newline');
-          const messageParts = responseMessage.split('\n\n');
-        
+          console.log("Response is too long, splitting by newline");
+          const messageParts = responseMessage.split("\n\n");
+
           // eslint-disable-next-line prefer-const
           for (let part of messageParts) {
-            if(part !== '') {
+            if (part !== "") {
               await client.messages.create({
                 body: part,
-                from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
+                from:
+                  process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
                 to: `whatsapp:${fromNumber}`,
               });
               console.log(part);
-              console.log('-------------------');
+              console.log("-------------------");
             }
           }
-
-        } else {            
+        } else {
           try {
             const message = await client.messages.create({
               body: responseMessage,
-              from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
+              from:
+                process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
               to: `whatsapp:${fromNumber}`,
             });
-            console.log('Message sent successfully:', message.sid);
+            console.log("Message sent successfully:", message.sid);
           } catch (error) {
-            console.error('Error sending message:', error);
+            console.error("Error sending message:", error);
           }
         }
-        
+
         // Responder con TwiML vacío para confirmar recepción
-        res.writeHead(200, { 'Content-Type': 'text/xml' });
+        res.writeHead(200, { "Content-Type": "text/xml" });
         res.end(twiml.toString());
       }
     } else {

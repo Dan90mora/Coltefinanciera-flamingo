@@ -1,6 +1,12 @@
 node_modules
 .env
 
+# Ignorar todos los archivos de test
+test_*
+
+# Configuración de VS Code
+.vscode/settings.json
+
 # Ignorar archivos de Lucia que puedan recrearse accidentalmente
 src/agents/luciaServiceAgent_new.ts
 src/agents/luciaServiceAgent_unified.ts
@@ -27,3 +33,17 @@ multiagent-test-452321-26b045082bfb.json
 token.json
 
 multiagent-test-452321-26b045082bfb.json
+# Scripts de verificación (no indispensables para producción)
+verify_*.sh
+
+# Archivos de verificación y testing (no indispensables para producción)
+verify_*
+
+# Documentación markdown (no indispensable para funcionamiento del agente)
+*.md
+
+# Scripts de verificación y diagnóstico (no indispensables para producción)
+check_*
+
+# Scripts de limpieza de VS Code (eliminados permanentemente)
+cleanup_vscode_*
