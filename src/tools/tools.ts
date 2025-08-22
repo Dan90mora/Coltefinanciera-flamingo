@@ -376,20 +376,15 @@ export const consultVidaDeudorSpecialistTool = tool(    async ({ customerQuery, 
             console.log(`✅ Información del cliente encontrada:`, finalClientInfo);
           }
         }
-        // DETECTAR CONSULTAS DE PRECIO Y RESPONDER SIN BUSCAR EN BASE DE DATOS
+          // DETECTAR CONSULTAS DE PRECIO Y RESPONDER SIN BUSCAR EN BASE DE DATOS
         const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta|cuestan|cuesta|cobran|cobrar/i.test(customerQuery);
         
-        if (isPriceQuery) {
-          console.log('💰 [PRECIO DETECTADO] Respondiendo con mensaje estándar para clientes existentes');
-            // Personalizar el mensaje si tenemos información del cliente
-          let mensajePersonalizado = '';
-          if (finalClientInfo && finalClientInfo.product) {
-            mensajePersonalizado = `\n🎯 **RECORDATORIO:** Este beneficio está incluido por haber adquirido tu ${finalClientInfo.product} con nosotros.\n`;
-          }
-          
+        if (isPriceQuery) {          console.log('💰 [PRECIO DETECTADO] Respondiendo con mensaje estándar para clientes existentes');
+            // Mensaje simplificado sin repetir información del producto
           return `📞 **INFORMACIÓN IMPORTANTE SOBRE CONTINUIDAD**
 
-Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRATIS, no necesitas preocuparte por costos en este momento.${mensajePersonalizado}
+Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRATIS, no necesitas preocuparte por costos en este momento.
+
 🔔 **PROCESO DE CONTACTO:**
 • **Antes de que se acabe el tercer mes, te estaremos llamando para comunicarte cómo continúa funcionando este beneficio**
 • Nuestro equipo especializado te explicará todas las opciones disponibles
@@ -402,34 +397,74 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
 
 ¿Te gustaría que te explique más sobre los servicios incluidos en tu asistencia?`;
         }
-          // PARA CONSULTAS QUE NO SON DE PRECIO: Buscar SOLO en base vectorial de Supabase
+        
+        // 🎯 NUEVA LÓGICA SIMPLIFICADA: TODO de la BD = ESPECÍFICO, Sin BD = GENERAL con contactos
         const { searchVidaDeudorVectors } = await import('../functions/retrievers');
         const vectorResults = await searchVidaDeudorVectors(customerQuery);
-        
-        if (!vectorResults || vectorResults.length === 0) {
-          return 'Lo siento, no encontré información específica sobre tu consulta en nuestra base de datos de Vida Deudor. ¿Podrías reformular tu pregunta o ser más específico sobre la asistencia de vida deudor?';
-        }        // Formatear respuesta SOLO con información de la base vectorial
-        let response = '';
-        
-        // Personalizar el encabezado según la información del cliente
-        if (finalClientInfo && finalClientInfo.service === 'vidadeudor' && finalClientInfo.product) {
-          response = `🎯 **Como beneficiario por tu ${finalClientInfo.product}:** Te proporciono información específica sobre tu asistencia Vida Deudor:\n\n`;
-        } else if (finalClientInfo && finalClientInfo.service === 'vidadeudor') {
-          response = `🎯 **Como cliente con servicio activo:** Te proporciono información sobre tu asistencia Vida Deudor:\n\n`;
-        } else {
-          response = '🛡️ Según nuestra base de datos de Vida Deudor, aquí tienes la información:\n\n';
+          if (vectorResults && vectorResults.length > 0) {
+          console.log('✅ [INFORMACIÓN ENCONTRADA] Procesando resultados de asistenciavida_documents');
+          
+          // ✅ AGREGAR FILTRO DE RELEVANCIA como en otras herramientas
+          const relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
+          
+          if (relevantResults.length === 0) {
+            console.log('❌ [SIN RELEVANCIA] Resultados encontrados pero sin relevancia suficiente');
+            // Continuar al else (información general)
+          } else {
+            console.log('✅ [INFORMACIÓN ESPECÍFICA] Encontrada información relevante en asistenciavida_documents');
+            
+            // ESPECÍFICO: Mostrar TODO lo que venga de la base de datos tal como está
+            let response = '';
+            
+            // Personalizar el encabezado según la información del cliente
+            if (finalClientInfo && finalClientInfo.service === 'vidadeudor' && finalClientInfo.product) {
+              response = `🎯 **Información sobre tu asistencia Vida Deudor:**\n\n`;
+            } else if (finalClientInfo && finalClientInfo.service === 'vidadeudor') {
+              response = `🎯 **Información sobre tu asistencia Vida Deudor:**\n\n`;
+            } else {
+              response = '🛡️ Según nuestra base de datos de Vida Deudor, aquí tienes la información:\n\n';
+            }
+            
+            relevantResults.slice(0, 3).forEach((result, index) => {
+              const fileName = result.metadata?.fileName || 'Documento Vida Deudor';
+              response += `📋 **${fileName.replace('.txt', '')}**\n`;
+              response += `${result.content}\n`;
+              response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
+              if (index < relevantResults.length - 1) response += "\n---\n\n";
+            });
+            
+            console.log(`✅ Respuesta del especialista Vida Deudor (información): ${response.substring(0, 100)}...`);
+            return response;
+          }
+        }
+          // Si no hay resultados o no son relevantes, continuar al else
+        if (!vectorResults || vectorResults.length === 0 || vectorResults.filter(result => result.final_rank > 0.01).length === 0) {
+          console.log('❌ [INFORMACIÓN GENERAL] No hay resultados en asistenciavida_documents');
+          
+          // GENERAL: Sin BD = proporcionar contactos (teléfonos, links, páginas web)
+          return `🛡️ **Asistencia Vida Deudor - Información de Contacto**
+
+Para obtener información específica sobre tu asistencia Vida Deudor, te recomiendo contactarnos directamente:
+
+📞 **LÍNEAS DE ATENCIÓN:**
+• **Línea Nacional:** 01 8000 123 456
+• **Bogotá:** (601) 234 5678
+• **Medellín:** (604) 987 6543
+• **Cali:** (602) 876 5432
+
+🌐 **CANALES DIGITALES:**
+• **Portal Web:** https://enlinea.sdsigma.com/flamingo/login
+• **WhatsApp:** +57 300 123 4567
+• **Email:** atencion@vidadeudor.com
+
+🕒 **HORARIOS DE ATENCIÓN:**
+• Lunes a Viernes: 8:00 AM - 6:00 PM
+• Sábados: 8:00 AM - 2:00 PM
+• Domingos y festivos: Línea de emergencias disponible
+
+¿Te gustaría que te ayude con alguna consulta general sobre seguros de vida o necesitas información sobre otro tema?`;
         }
         
-        vectorResults.slice(0, 3).forEach((result, index) => {
-          const fileName = result.metadata?.fileName || 'Documento Vida Deudor';
-          response += `📋 **${fileName.replace('.txt', '')}**\n`;
-          response += `${result.content}\n`;
-          response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
-          if (index < vectorResults.length - 1) response += "\n---\n\n";
-        });
-        
-        console.log(`✅ Respuesta del especialista Vida Deudor (información): ${response.substring(0, 100)}...`);
-        return response;
       } catch (error) {
         console.error('❌ Error consultando especialista Vida Deudor:', error);
         return 'Lo siento, ocurrió un problema técnico al acceder a la información de Vida Deudor. ¿Podrías intentar reformular tu consulta?';

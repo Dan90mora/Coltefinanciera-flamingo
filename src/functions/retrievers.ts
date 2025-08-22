@@ -29,9 +29,11 @@ export const searchDentixVectors = async (query: string): Promise<any[]> => {
     const embeddings = createEmbeddings();
     const supabase = createSupabaseClient();
     console.log(`🔍 Buscando en Dentix`);
+    
     // Generar embedding para la consulta
     const queryEmbedding = await embeddings.embedQuery(query);
-      // Buscar documentos similares en Dentix
+    
+    // Buscar documentos similares en Dentix
     const { data, error } = await supabase.rpc('match_dentix_documents', {
         query_embedding: queryEmbedding,
         match_threshold: 0.3, // Umbral más bajo para permitir más resultados
@@ -57,7 +59,9 @@ export const searchCredintegralVectors = async (query: string): Promise<any[]> =
 
     try {
         const queryEmbedding = await embeddings.embedQuery(query);
-        console.log("[DEBUG] Embedding generado para la consulta.");        // Detectar si la consulta es sobre cobertura o precios y optimizar la búsqueda
+        console.log("[DEBUG] Embedding generado para la consulta.");
+        
+        // Detectar si la consulta es sobre cobertura o precios y optimizar la búsqueda
         const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara/i.test(query);
         const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización/i.test(query);
         
@@ -121,25 +125,28 @@ export const searchCredintegralVectors = async (query: string): Promise<any[]> =
 };
 
 /**
- * Busca en la base vectorial de Vida Deudor usando embeddings de OpenAI
+ * 🚀 MEJORA GLOBAL: Busca en la base vectorial de Vida Deudor usando embeddings de OpenAI
+ * NUEVA ESTRATEGIA: Búsqueda exhaustiva con ranking en lugar de devolver "lo primero que encuentre"
  * @param query - La consulta del usuario
- * @returns Array de resultados de la búsqueda vectorial
+ * @returns Array de resultados de la búsqueda vectorial rankeados por relevancia
  */
 export const searchVidaDeudorVectors = async (query: string): Promise<any[]> => {
     const embeddings = createEmbeddings();
     const supabase = createSupabaseClient();
-    console.log(`[DEBUG] Iniciando búsqueda en Vida Deudor con la consulta: "${query}"`);
+    console.log(`[DEBUG] 🔍 Iniciando búsqueda EXHAUSTIVA en Vida Deudor con la consulta: "${query}"`);
 
     try {
         // Generar embedding para la consulta
         const queryEmbedding = await embeddings.embedQuery(query);
         console.log("[DEBUG] Embedding generado para la consulta.");
-
-        // Detectar si la consulta es sobre cobertura o precios y optimizar la búsqueda
+        
+        // Detectar si la consulta es sobre cobertura, precios o farmacias y optimizar la búsqueda
         const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara/i.test(query);
         const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización|cuanto cuesta|que cuesta|que precio|precio tiene|valor tiene|costo tiene|vale el seguro|cuanto vale|valor del seguro|costo del seguro|precio del seguro/i.test(query);
+        const isFarmaciaQuery = /farmacia|farmacias|droguería|droguerías|drogue|rebaja|medicamento|medicina|aplicar beneficio|donde puedo|que farmacias|cuales farmacias/i.test(query);
         
-        // Estrategia de búsqueda: empezar con la consulta original, luego simplificar
+        // 🎯 NUEVA ESTRATEGIA: BÚSQUEDA EXHAUSTIVA CON RANKING
+        // En lugar de devolver el primer resultado, recopilar TODOS los resultados y rankearlos
         let searchQueries = [query];
         
         // Siempre agregar versiones simplificadas como fallback
@@ -147,7 +154,20 @@ export const searchVidaDeudorVectors = async (query: string): Promise<any[]> => 
         searchQueries.push("seguro vida deudor");
         searchQueries.push("asistencia vida deudor");
         
-        if (isCoverageQuery) {
+        if (isFarmaciaQuery) {
+            // 🎯 NUEVA LÓGICA: Consultas específicas sobre farmacias
+            console.log("[DEBUG] 💊 Consulta sobre farmacias detectada, agregando términos específicos...");
+            searchQueries.push("SERVICIO CONVENIO DESCUENTOS EN FARMACIAS");
+            searchQueries.push("descuento farmacias");
+            searchQueries.push("descuentos en farmacias");
+            searchQueries.push("farmacia aliada");
+            searchQueries.push("beneficio farmacia");
+            searchQueries.push("Rebaja Droguerías");
+            searchQueries.push("5% descuento");
+            searchQueries.push("ACCESO AL SERVICIO DESCUENTOS EN FARMACIAS");
+            searchQueries.push("puntos de venta");
+            searchQueries.push("Minimarkets");
+        } else if (isCoverageQuery) {
             // Agregar variaciones de búsqueda para consultas sobre cobertura
             searchQueries.push("cobertura");
             searchQueries.push("servicios incluidos");
@@ -175,6 +195,10 @@ export const searchVidaDeudorVectors = async (query: string): Promise<any[]> => 
             searchQueries.push("beneficios");
         }
 
+        // 🔍 BÚSQUEDA EXHAUSTIVA: Recopilar resultados de TODAS las consultas
+        const allChunks: any[] = [];
+        const seenIds = new Set<number>();
+        
         for (const searchQuery of searchQueries) {
             const searchEmbedding = searchQuery === query ? queryEmbedding : await embeddings.embedQuery(searchQuery);
             
@@ -182,7 +206,7 @@ export const searchVidaDeudorVectors = async (query: string): Promise<any[]> => 
                 query_embedding: searchEmbedding,
                 query_text: searchQuery,
                 match_threshold: 0.1,
-                match_count: 5, 
+                match_count: 8, // Aumentamos para obtener más resultados
                 rrf_k: 60
             });
 
@@ -192,16 +216,73 @@ export const searchVidaDeudorVectors = async (query: string): Promise<any[]> => 
             }
 
             if (data && data.length > 0) {
-                console.log('[DEBUG] ✅ Llamada RPC a Supabase exitosa.');
-                console.log(`[DEBUG] 📄 Encontrado con consulta: "${searchQuery}"`);
-                console.log('[DEBUG] 📄 Datos recibidos de Supabase:', JSON.stringify(data, null, 2));
-                return data;
+                console.log(`[DEBUG] ✅ Consulta "${searchQuery}" encontró ${data.length} resultados`);
+                
+                // Agregar solo documentos únicos (evitar duplicados)
+                for (const doc of data) {
+                    if (!seenIds.has(doc.id)) {
+                        seenIds.add(doc.id);
+                        // Agregar score de la consulta que lo encontró para ranking
+                        doc.search_query = searchQuery;
+                        doc.query_index = searchQueries.indexOf(searchQuery); // 0 = consulta original, mayor = menos específica
+                        allChunks.push(doc);
+                    }
+                }
             }
         }
 
-        // Si no encontramos nada con ninguna consulta
-        console.log('[DEBUG] ⚠️ La búsqueda no arrojó resultados desde Supabase.');
-        return [];
+        // 📊 RANKING Y CONSOLIDACIÓN DE RESULTADOS
+        if (allChunks.length === 0) {
+            console.log('[DEBUG] ⚠️ La búsqueda exhaustiva no arrojó resultados desde Supabase.');
+            return [];
+        }
+
+        console.log(`[DEBUG] 🔍 Búsqueda exhaustiva completada: ${allChunks.length} documentos únicos encontrados`);
+
+        // 🎯 LÓGICA ESPECIAL PARA FARMACIAS: Priorización específica
+        if (isFarmaciaQuery) {
+            const farmaciaDoc = allChunks.find((doc: any) => 
+                doc.id === 35 || 
+                doc.content.includes('SERVICIO CONVENIO DESCUENTOS EN FARMACIAS') || 
+                doc.content.includes('Rebaja Droguerías')
+            );
+            if (farmaciaDoc) {
+                console.log('[DEBUG] 🎯 ¡Documento específico de farmacias encontrado! Priorizando...');
+                // Reorganizar para poner el documento de farmacias primero
+                const otherDocs = allChunks.filter((doc: any) => doc.id !== farmaciaDoc.id);
+                return [farmaciaDoc, ...otherDocs.slice(0, 2)]; // Farmacia + 2 documentos adicionales
+            }
+        }
+
+        // 🏆 RANKING GLOBAL: Ordenar por relevancia combinada
+        allChunks.sort((a, b) => {
+            // 1. Priorizar por final_rank (relevancia semántica)
+            const rankDiff = (b.final_rank || 0) - (a.final_rank || 0);
+            if (Math.abs(rankDiff) > 0.01) return rankDiff;
+            
+            // 2. Si el ranking es similar, priorizar consultas más específicas (query_index menor)
+            const queryDiff = (a.query_index || 0) - (b.query_index || 0);
+            if (queryDiff !== 0) return queryDiff;
+            
+            // 3. Como último criterio, usar similarity si está disponible
+            return (b.similarity || 0) - (a.similarity || 0);
+        });
+
+        // Filtrar por umbral mínimo de relevancia
+        const relevantResults = allChunks.filter(doc => (doc.final_rank || 0) > 0.01);
+        
+        if (relevantResults.length === 0) {
+            console.log('[DEBUG] ⚠️ Ningún resultado superó el umbral mínimo de relevancia (0.01)');
+            return allChunks.slice(0, 3); // Devolver los 3 mejores aunque tengan baja relevancia
+        }
+
+        console.log(`[DEBUG] 🏆 Ranking final: ${relevantResults.length} documentos relevantes`);
+        relevantResults.slice(0, 3).forEach((doc, i) => {
+            console.log(`[DEBUG] ${i + 1}. ID: ${doc.id}, Rank: ${doc.final_rank?.toFixed(3)}, Query: "${doc.search_query}"`);
+        });
+
+        // Devolver los mejores 3 resultados rankeados
+        return relevantResults.slice(0, 3);
 
     } catch (e) {
         const errorMessage = e instanceof Error ? e.message : String(e);
@@ -319,33 +400,6 @@ function extractPriceFromTariffContent(content: string): string | null {
     
     return null;
 }
-
-/**
- * PLANTILLA para futuras bases vectoriales
- * Copia y adapta esta función para nuevas bases de datos vectoriales
- */
-/*
-export const searchNewServiceVectors = async (query: string): Promise<any[]> => {
-    const embeddings = createEmbeddings();
-    const supabase = createSupabaseClient();
-    
-    // Generar embedding para la consulta
-    const queryEmbedding = await embeddings.embedQuery(query);
-    
-    // Buscar documentos similares en la nueva base
-    const { data, error } = await supabase.rpc('match_newservice_documents', {
-        query_embedding: queryEmbedding,
-        match_threshold: 0.6,
-        match_count: 3,
-    });
-    
-    if (error) {
-        throw new Error(`NewService vector search error: ${error.message}`);
-    }
-    
-    return data || [];
-};
-*/
 
 /**
  * Busca en la base vectorial de Bienestar Plus usando embeddings de OpenAI
