@@ -3,26 +3,72 @@
     "**/test_*": true,
     "**/*.md": true,
     "**/check_*": true,
-    "**/cleanup_vscode_*": true
+    "**/cleanup_vscode_*": true,
+    "**/debug_*": true,
+    "**/dist": true,
+    "src/**/*.js": true,
+    "**/node_modules": true,
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "scripts/": true,
+    "**/*.log": true,
+    "**/temp/": true,
+    "**/.env.local": true
   },
   "search.exclude": {
     "**/test_*": true,
     "**/*.md": true,
     "**/check_*": true,
-    "**/cleanup_vscode_*": true
+    "**/cleanup_vscode_*": true,
+    "**/debug_*": true,
+    "**/dist": true,
+    "src/**/*.js": true,
+    "**/node_modules": true,
+    "scripts/": true,
+    "**/*.log": true,
+    "**/temp/": true
   },
   "files.watcherExclude": {
     "**/test_*": true,
     "**/*.md": true,
     "**/check_*": true,
-    "**/cleanup_vscode_*": true
+    "**/cleanup_vscode_*": true,
+    "**/debug_*": true,
+    "**/node_modules": true,
+    "scripts/": true,
+    "**/*.log": true,
+    "**/temp/": true
   },
   "workbench.editor.restoreViewState": false,
-  "workbench.editor.enablePreview": true,
-  "workbench.editor.enablePreviewFromQuickOpen": true,
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.enablePreviewFromQuickOpen": false,
   "workbench.editor.closeEmptyGroups": true,
   "workbench.editor.closeOnFileDelete": true,
+  "workbench.editor.limit.enabled": true,
+  "workbench.editor.limit.value": 10,
+  "workbench.editor.limit.perEditorGroup": true,
   "files.hotExit": "off",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
   "explorer.autoReveal": false,
-  "workbench.editor.revealIfOpen": true
+  "explorer.confirmDelete": true,
+  "workbench.editor.revealIfOpen": true,
+  "workbench.editor.tabCloseButton": "right",
+  "workbench.editor.tabSizing": "fit",
+  "typescript.preferences.includePackageJsonAutoImports": "off",
+  "typescript.suggest.autoImports": false,
+  "files.associations": {
+    "*.env": "properties",
+    "*.env.*": "properties"
+  },
+  "explorer.excludeGitIgnore": true,
+  "explorer.sortOrder": "type",
+  "breadcrumbs.enabled": true,
+  "breadcrumbs.filePath": "on",
+  "emmet.includeLanguages": {
+    "typescript": "html"
+  },
+  "workbench.editor.tabActionLocation": "right"
 }
