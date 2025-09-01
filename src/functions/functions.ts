@@ -13,50 +13,7 @@ if (process.env.SENDGRID_API_KEY) {
     console.warn('SENDGRID_API_KEY no está definida. El envío de correos no funcionará.');
 }
 
-// export function contactCustomerService() {
-//     const customerServiceData = {
-//       whatsapp: "https://wa.me/573335655669",
-//       description: "Linea de atención especializada para ventas.",
-//     };
-//     console.log('contactCustomerService executed');
-//     return JSON.stringify(customerServiceData);
-// }
 
-// Función para eliminar tildes y diéresis
-// function removeAccents(str: string): string {
-//     return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
-//   }
-  
-// export function getProductInfo(product: "cámara" | "alarma" | "cerca eléctrica"): string {
-//     type ProductType = "cámara" | "alarma" | "cerca eléctrica";
-
-//     const products: Record<ProductType, { description: string; price: string; features: string[] }> = {
-//       "cámara": {
-//         description: "Cámara de seguridad para interiores y exteriores.",
-//         price: "$200.000",
-//         features: ["Resolución HD", "Visión nocturna", "Detección de movimiento"],
-//       },
-//       "alarma": {
-//         description: "Alarma para proteger tu hogar o negocio.",
-//         price: "$150.000",
-//         features: ["Sirena de alta potencia", "Sensor de movimiento", "Control remoto"],
-        // },
-        // "cerca eléctrica": {
-        //   description: "Cerca eléctrica para proteger tu propiedad.",
-        //   price: "$300.000",
-        //   features: ["Alarma de alta potencia", "Sensor de movimiento", "Control remoto"],
-        // },
-    // };
-
-    // console.log('getProductInfo executed');
-
-    // const productInfo = products[product];
-    // if (productInfo) {
-    //   return JSON.stringify(productInfo);
-    // }
-
-    // return "Lo siento, no tenemos información sobre ese producto.";
-//}
 
 // Función para solucionar problema con camara que no da imagen
 export function troubleshootIssue(issue: string): string {
@@ -131,14 +88,14 @@ export async function searchDentixDocuments(query: string): Promise<string> {
             const errorMessage = supabaseError instanceof Error ? supabaseError.message : String(supabaseError);
             console.log('⚠️ Supabase no disponible, usando búsqueda local:', errorMessage);
         }
-        
+
         // Fallback: Buscar en archivos locales de texto
         const results = await searchInLocalTextFiles(query);
-        
+
         if (!results || results.length === 0) {
             return "Lo siento, no encontré información específica sobre tu consulta en los documentos de Dentix. ¿Podrías reformular tu pregunta o ser más específico?";
         }
-        
+
         console.log('✅ Usando resultados de búsqueda local');
         return formatLocalResults(results);
     } catch (error) {
@@ -155,7 +112,7 @@ export async function searchDentixDocuments(query: string): Promise<string> {
  */
 function formatSupabaseResults(results: any[], serviceName: string): string {
     let response = `Según la información de nuestra base de datos de ${serviceName}, esto es lo que encontré:\n\n`;
-    
+
     results.forEach((result, index) => {
         // Manejo seguro de metadata y fileName
         const fileName = result.metadata?.fileName || `Documento de ${serviceName}`;
@@ -164,7 +121,7 @@ function formatSupabaseResults(results: any[], serviceName: string): string {
         response += `(Similitud: ${(result.similarity * 100).toFixed(1)}%)\n`;
         if (index < results.length - 1) response += "\n---\n\n";
     });
-    
+
     return response;
 }
 
@@ -173,14 +130,14 @@ function formatSupabaseResults(results: any[], serviceName: string): string {
  */
 function formatLocalResults(results: Array<{fileName: string, content: string, score: string}>): string {
     let response = "Encontré la siguiente información en los documentos de Dentix:\n\n";
-    
+
     results.forEach((result, index) => {
         response += `📄 **${result.fileName.replace('.txt', '')}**\n`;
         response += `${result.content}\n`;
         response += `(Relevancia: ${result.score})\n`;
         response += "\n---\n\n";
     });
-    
+
     return response;
 }
 
@@ -191,83 +148,83 @@ async function searchInLocalTextFiles(query: string): Promise<Array<{fileName: s
     const fs = await import('fs');
     const path = await import('path');
     const { fileURLToPath } = await import('url');
-    
+
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const dentixFolder = path.join(__dirname, '../../Dentix-pdf');
-    
+
     const results: Array<{fileName: string, content: string, score: string}> = [];
-    
+
     try {
         // Verificar si existe la carpeta
         if (!fs.existsSync(dentixFolder)) {
             console.log('❌ Carpeta Dentix-pdf no encontrada');
             return results;
         }
-        
+
         // Leer archivos .txt
         const files = fs.readdirSync(dentixFolder);
         const txtFiles = files.filter(file => file.endsWith('.txt'));
-        
+
         if (txtFiles.length === 0) {
             console.log('❌ No se encontraron archivos .txt en Dentix-pdf');
             return results;
         }
-        
+
         console.log(`📁 Buscando en ${txtFiles.length} archivos .txt`);
-        
+
         const queryLower = query.toLowerCase();
         const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
-        
+
         for (const txtFile of txtFiles) {
             const filePath = path.join(dentixFolder, txtFile);
             const content = fs.readFileSync(filePath, 'utf-8');
             const contentLower = content.toLowerCase();
-            
+
             let score = 0;
             let matchedSections: string[] = [];
-            
+
             // Buscar palabras clave
             for (const word of queryWords) {
                 if (contentLower.includes(word)) {
                     score += 1;
                 }
             }
-            
+
             // Buscar frase completa
             if (contentLower.includes(queryLower)) {
                 score += 3;
             }
-            
+
             // Si hay coincidencias, encontrar las secciones relevantes
             if (score > 0) {
                 const lines = content.split('\n');
                 const relevantLines: string[] = [];
-                
+
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i];
                     const lineLower = line.toLowerCase();
-                    
+
                     // Verificar si la línea contiene alguna palabra clave
                     const hasKeyword = queryWords.some(word => lineLower.includes(word));
-                    
+
                     if (hasKeyword) {
                         // Incluir contexto (líneas anteriores y posteriores)
                         const start = Math.max(0, i - 2);
                         const end = Math.min(lines.length, i + 3);
-                        
+
                         const contextLines = lines.slice(start, end).join('\n');
                         if (!matchedSections.some(section => section.includes(contextLines.substring(0, 50)))) {
                             matchedSections.push(contextLines);
                         }
                     }
                 }
-                
+
                 // Combinar las secciones relevantes
-                const relevantContent = matchedSections.length > 0 
+                const relevantContent = matchedSections.length > 0
                     ? matchedSections.join('\n\n...\n\n')
                     : content.substring(0, 500) + '...';
-                
+
                 results.push({
                     fileName: txtFile.replace('.txt', ''),
                     content: relevantContent,
@@ -275,17 +232,17 @@ async function searchInLocalTextFiles(query: string): Promise<Array<{fileName: s
                 });
             }
         }
-        
+
         // Ordenar por score descendente
         results.sort((a, b) => {
             const scoreA = parseInt(a.score.split(' ')[0]);
             const scoreB = parseInt(b.score.split(' ')[0]);
             return scoreB - scoreA;
         });
-        
+
         // Limitar a 3 resultados
         return results.slice(0, 3);
-        
+
     } catch (error) {
         console.error('Error en searchInLocalTextFiles:', error);
         return results;
@@ -299,11 +256,11 @@ async function searchInLocalTextFiles(query: string): Promise<Array<{fileName: s
  */
 export async function searchCredintegralDocuments(query: string): Promise<string> {
     console.log('🔍 Buscando en documentos de Credintegral:', query);
-    
+
     try {
         console.log('🔄 Intentando búsqueda vectorial en Supabase...');
         const supabaseResults = await searchCredintegralVectors(query);
-        
+
         if (supabaseResults && supabaseResults.length > 0) {
             console.log('✅ Usando resultados de Supabase para Credintegral');
             return formatSupabaseResults(supabaseResults, "Credintegral");
@@ -324,13 +281,13 @@ export async function searchCredintegralDocuments(query: string): Promise<string
 /*
 export async function searchVidaDeudorDocuments(query: string): Promise<string> {
     console.log('🔍 [VIDA DEUDOR] Procesando consulta:', query);
-    
+
     // PASO 1: DETECTAR CONSULTAS DE PRECIO DE MANERA MÁS AGRESIVA
     const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta/i.test(query);
-    
+
     if (isPriceQuery) {
         console.log('💰 [PRECIO DETECTADO] Para clientes nuevos...');
-        
+
         // RETORNO DEL PRECIO SOLO PARA CLIENTES NUEVOS
         // NOTA: Para clientes existentes con service="vidadeudor", el agente debe manejar esto según el prompt
         return `💰 **INFORMACIÓN SOBRE LA ASISTENCIA VIDA DEUDOR**
@@ -355,13 +312,13 @@ La asistencia Vida Deudor tiene un costo de **$500** por persona al mes para usu
 
 **PRECIO ESTÁNDAR: $500 por persona al mes**`;
     }
-    
+
     // PASO 2: Para consultas que NO son de precio, usar búsqueda normal
     try {
         console.log('🔄 Intentando búsqueda vectorial en Supabase...');
         const { searchVidaDeudorVectors } = await import('./retrievers');
         const supabaseResults = await searchVidaDeudorVectors(query);
-        
+
         if (supabaseResults && supabaseResults.length > 0) {
             console.log('✅ Usando resultados de Supabase para Vida Deudor');
             return formatSupabaseResults(supabaseResults, "Vida Deudor");
@@ -392,20 +349,20 @@ const createSupabaseClient = () => createClient(
  */
 export async function searchDentixClientByPhone(phoneNumber: string): Promise<{ name: string; email: string; phone_number: string; service?: string; product?: string; } | null> {
     console.log(`🔍 Buscando cliente en Supabase con número: ${phoneNumber}`);
-    
+
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_KEY;
-    
+
     if (!supabaseUrl || !supabaseKey) {
         console.error('❌ Supabase URL o KEY no están definidos en las variables de entorno');
         return null;
     }
 
     const supabase = createSupabaseClient();
-    
+
     // 1. Limpiar el número telefónico (quitar espacios, guiones, paréntesis)
     const cleanPhoneNumber = phoneNumber.replace(/[\s\-\(\)]/g, '');
-    
+
     // 2. Construir una lista de posibles números a buscar
     const searchVariations = new Set<string>();
     searchVariations.add(cleanPhoneNumber); // Tal como viene
@@ -442,7 +399,7 @@ export async function searchDentixClientByPhone(phoneNumber: string): Promise<{ 
         } else {
             console.log(`❌ No se encontró cliente para "${phoneNumber}" con las variaciones probadas.`);
         }
-        
+
         return data || null;
     } catch (error) {
         console.error('Error buscando cliente Dentix:', error);
@@ -535,13 +492,13 @@ export async function sendPaymentLinkEmail(clientName: string, clientEmail: stri
  * @returns Información del cliente y confirmación de la operación
  */
 export async function confirmAndUpdateClientData(
-    phoneNumber: string, 
+    phoneNumber: string,
     updates?: { name?: string; email?: string; phoneNumber?: string }
 ): Promise<string> {
     const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
-    
+
     console.log(`🔍 Confirmando datos del cliente con número: ${phoneNumber}`);
-    
+
     try {
         // Primero buscar el cliente existente
         const searchVariations = [
@@ -600,7 +557,7 @@ export async function confirmAndUpdateClientData(
 
         // Si hay actualizaciones, aplicarlas
         console.log('✏️ Aplicando actualizaciones a los datos del cliente');
-        
+
         const fieldsToUpdate: any = {};
         if (updates.name && updates.name.trim() !== '') {
             fieldsToUpdate.name = updates.name.trim();
@@ -679,9 +636,9 @@ Ahora puedes proceder con la adquisición de tu seguro.`
  */
 export async function showVidaDeudorClientDataForConfirmation(phoneNumber: string): Promise<string> {
     console.log(`🛡️ [VIDA DEUDOR] Mostrando datos para confirmación - Cliente: ${phoneNumber}`);
-    
+
     const supabase = createSupabaseClient();
-    
+
     try {        // Buscar cliente con las variaciones de número
         const cleanNumber = phoneNumber.replace(/[\s\-\(\)\+]/g, '');
         const searchVariations = [
@@ -696,7 +653,7 @@ export async function showVidaDeudorClientDataForConfirmation(phoneNumber: strin
 
         // Eliminar duplicados y números vacíos
         const uniqueVariations = [...new Set(searchVariations)].filter(v => v && v.length >= 10);
-        
+
         console.log(`🔍 Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);        console.log(`🔍 Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);
 
         let clientData = null;
@@ -758,7 +715,7 @@ export async function updateVidaDeudorClientData(
     updates: { document_id?: string; name?: string; phone_number?: string; email?: string }
 ): Promise<string> {
     console.log(`🛡️ [VIDA DEUDOR] Actualizando datos del cliente: ${phoneNumber}`);
-    
+
     const supabase = createSupabaseClient();
       try {
         // Buscar cliente con las variaciones de número (misma lógica que showVidaDeudorClientDataForConfirmation)
@@ -775,7 +732,7 @@ export async function updateVidaDeudorClientData(
 
         // Eliminar duplicados y números vacíos
         const uniqueVariations = [...new Set(searchVariations)].filter(v => v && v.length >= 10);
-        
+
         console.log(`🔍 [UPDATE] Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);
 
         let clientData = null;
@@ -887,12 +844,12 @@ export async function updateVidaDeudorClientData(
  */
 export async function searchBienestarDocuments(query: string): Promise<string> {
     console.log('🔍 [BIENESTAR PLUS] Procesando consulta SOLO EN SUPABASE:', query);
-    
+
     try {
         console.log('🔄 Intentando búsqueda vectorial en Supabase...');
         const { searchBienestarVectors } = await import('./retrievers');
         const supabaseResults = await searchBienestarVectors(query);
-        
+
         if (supabaseResults && supabaseResults.length > 0) {
             console.log('✅ Usando resultados de Supabase para Bienestar Plus');
             return formatSupabaseResults(supabaseResults, "Bienestar Plus");
@@ -978,61 +935,399 @@ export function extractBienestarSection(content: string, type: 'precio'|'cobertu
  * Envía un correo de activación para la asistencia Vida Deudor
  * @param clientName - Nombre del cliente
  * @param clientEmail - Correo electrónico del cliente
+ * @param clientPhone - Número de teléfono del cliente (opcional)
+ * @param clientDocument - Documento del cliente (opcional)
  * @returns Resultado de la operación
  */
-export async function sendVidaDeudorActivationEmail(clientName: string, clientEmail: string): Promise<string> {
-    console.log(`📧 Intentando enviar correo de activación de Vida Deudor a ${clientName} (${clientEmail})`);
+export async function sendVidaDeudorActivationEmail(
+    clientName: string,
+    clientEmail: string,
+    clientPhone?: string,
+    clientDocument?: string
+): Promise<string> {
+    console.log(`🚀 [VIDA DEUDOR EMAIL] Iniciando envío para ${clientName} (${clientEmail})`);
+    console.log(`📋 Datos recibidos: nombre=${clientName}, email=${clientEmail}, phone=${clientPhone}, doc=${clientDocument}`);
 
-    const emailContent = `
-        Hola ${clientName},        ¡Excelentes noticias! Tu asistencia Vida Deudor ha sido activada exitosamente.
+    if (!process.env.SENDGRID_API_KEY) {
+        const errorMsg = 'SendGrid API Key no configurado';
+        console.error(`❌ ${errorMsg}`);
+        return JSON.stringify({
+            success: false,
+            message: errorMsg
+        });
+    }
 
-        Como cliente especial de Coltefinanciera, disfrutarás de 3 meses completamente gratis de cobertura.
+    // 📧 USAR MÉTODO OFICIAL SENDGRID: ARRAY DE EMAILS
+    const multipleMessages = [
+        {
+            to: clientEmail,
+            from: {
+                email: "notificaciones@asistenciacoltefinanciera.com",
+                name: "Coltefinanciera Seguros"
+            },
+            replyTo: "atencion@asistenciacoltefinanciera.com",
+            subject: "✅ Tu Asistencia Vida Deudor ha sido activada",
+            text: `Hola ${clientName},
 
-        Tu asistencia incluye:
-        • Teleconsulta medicina general (2 eventos por año)
-        • Telenutrición ilimitada
-        • Telepsicología (2 eventos por año)
-        • Descuentos ilimitados en farmacias
+¡Excelentes noticias! Tu asistencia Vida Deudor ha sido activada exitosamente.
 
-        Tu cobertura está activa desde este momento y no requiere ningún pago adicional durante los primeros 3 meses.
+Como cliente especial de Coltefinanciera, disfrutarás de 3 meses completamente gratis de cobertura.
 
-        Gracias por confiar en Coltefinanciera Seguros.
+Tu asistencia incluye:
+• Teleconsulta medicina general (2 eventos por año)
+• Telenutrición ilimitada
+• Telepsicología (2 eventos por año)
+• Descuentos ilimitados en farmacias
 
-        Saludos,
-        Lucia
-        Asesora de Seguros
-    `;
+Tu cobertura está activa desde este momento y no requiere ningún pago adicional durante los primeros 3 meses.
 
-    const msg = {
-      to: clientEmail,
-      from: "notificaciones@asistenciacoltefinanciera.com",
-      subject: "✅ Tu Asistencia Vida Deudor ha sido activada",
-      text: emailContent,
-      html: emailContent.replace(/\n/g, "<br>"),
+Gracias por confiar en Coltefinanciera Seguros.
+
+Saludos,
+Lucia
+Asesora de Seguros
+Coltefinanciera Seguros`,
+            html: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Activación Vida Deudor</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px;">
+        <h2 style="color: #2c3e50;">¡Tu Asistencia Vida Deudor está Activada!</h2>
+
+        <p>Hola <strong>${clientName}</strong>,</p>
+
+        <p>¡Excelentes noticias! Tu asistencia Vida Deudor ha sido activada exitosamente.</p>
+
+        <p>Como cliente especial de Coltefinanciera, disfrutarás de <strong>3 meses completamente gratis</strong> de cobertura.</p>
+
+        <h3 style="color: #27ae60;">Tu asistencia incluye:</h3>
+        <ul>
+            <li>Teleconsulta medicina general (2 eventos por año)</li>
+            <li>Telenutrición ilimitada</li>
+            <li>Telepsicología (2 eventos por año)</li>
+            <li>Descuentos ilimitados en farmacias</li>
+        </ul>
+
+        <p style="background-color: #e8f5e8; padding: 15px; border-radius: 5px;">
+            <strong>Tu cobertura está activa desde este momento</strong> y no requiere ningún pago adicional durante los primeros 3 meses.
+        </p>
+
+        <p>Gracias por confiar en Coltefinanciera Seguros.</p>
+
+        <p>Saludos,<br>
+        <strong>Lucia</strong><br>
+        Asesora de Seguros<br>
+        Coltefinanciera Seguros</p>
+
+        <hr style="margin: 20px 0;">
+        <p style="font-size: 12px; color: #666;">
+            Este correo fue enviado desde nuestro sistema automatizado de activación de seguros.
+        </p>
+    </div>
+</body>
+</html>`,
+            categories: ["vida-deudor", "activacion", "cliente"],
+            customArgs: {
+                "client_email": clientEmail,
+                "client_name": clientName,
+                "service": "vida_deudor",
+                "type": "activation"
+            }
+        },
+        {
+            to: "danielmoyemanizales@gmail.com",
+            from: {
+                email: "notificaciones@asistenciacoltefinanciera.com",
+                name: "Sistema Coltefinanciera"
+            },
+            subject: "🔔 Nueva activación de Vida Deudor - " + clientName,
+            text: `Estimado Daniel,
+
+Te informamos que un nuevo cliente ha activado el servicio de Vida Deudor.
+
+DATOS DEL CLIENTE:
+📋 Nombre: ${clientName}
+📧 Correo: ${clientEmail}
+📱 Teléfono: ${clientPhone || 'No proporcionado'}
+🆔 Documento: ${clientDocument || 'No proporcionado'}
+📅 Fecha de activación: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
+
+El cliente ha recibido su correo de confirmación y ya tiene acceso a los beneficios de la asistencia Vida Deudor por 3 meses gratis.
+
+Saludos,
+Sistema Coltefinanciera`,
+            html: `<h3>Nueva activación de Vida Deudor</h3>
+<p>Estimado Daniel,</p>
+<p>Te informamos que un nuevo cliente ha activado el servicio de Vida Deudor.</p>
+<h4>DATOS DEL CLIENTE:</h4>
+<ul>
+<li><strong>Nombre:</strong> ${clientName}</li>
+<li><strong>Correo:</strong> ${clientEmail}</li>
+<li><strong>Teléfono:</strong> ${clientPhone || 'No proporcionado'}</li>
+<li><strong>Documento:</strong> ${clientDocument || 'No proporcionado'}</li>
+<li><strong>Fecha:</strong> ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</li>
+</ul>
+<p>El cliente ha recibido su correo de confirmación y ya tiene acceso a los beneficios de la asistencia Vida Deudor por 3 meses gratis.</p>
+<p>Saludos,<br>Sistema Coltefinanciera</p>`,
+            categories: ["vida-deudor", "activacion", "admin"]
+        }
+    ];
+
+    try {
+        console.log('📧 USANDO MÉTODO OFICIAL SENDGRID: Array de emails');
+        console.log(`   📧 Email 1: Cliente (${clientEmail})`);
+        console.log(`   📧 Email 2: Admin (danielmoyemanizales@gmail.com)`);
+
+        const results = await sgMail.send(multipleMessages);
+
+        console.log(`✅ ENVÍO COMPLETADO: ${results.length} emails procesados`);
+
+        let clientSent = false;
+        let adminSent = false;
+        let clientMessageId = null;
+        let adminMessageId = null;
+          results.forEach((result: any, index) => {
+            const email = multipleMessages[index].to;
+            const status = result.statusCode || 'unknown';
+            const messageId = result.headers?.['x-message-id'] || null;
+
+            console.log(`   ✅ Email ${index + 1} (${email}): Status ${status}, MessageID: ${messageId}`);
+
+            if (email === clientEmail) {
+                clientSent = true;
+                clientMessageId = messageId;
+            } else if (email === "danielmoyemanizales@gmail.com") {
+                adminSent = true;
+                adminMessageId = messageId;
+            }
+        });
+
+        const success = clientSent && adminSent;
+
+        console.log(`📊 RESULTADO FINAL:`);
+        console.log(`   Cliente (${clientEmail}): ${clientSent ? '✅ ENVIADO' : '❌ ERROR'}`);
+        console.log(`   Admin: ${adminSent ? '✅ ENVIADO' : '❌ ERROR'}`);
+        console.log(`   Éxito general: ${success ? '✅ SÍ' : '❌ NO'}`);
+
+        return JSON.stringify({
+            success: success,
+            message: success
+                ? `✅ CORREOS ENVIADOS EXITOSAMENTE a ${clientEmail} y al administrador`
+                : `❌ Error en el envío de emails`,
+            details: {
+                clientSent,
+                adminSent,
+                clientEmail,
+                clientMessageId,
+                adminMessageId,
+                totalEmailsSent: results.length,
+                method: "sendgrid_array_official",
+                timestamp: new Date().toISOString()
+            }
+        });
+
+    } catch (error: any) {
+        console.error('❌ ERROR EN ENVÍO DE EMAILS:', error.message);
+
+        if (error.response && error.response.body) {
+            console.error('📋 Detalles del error:', JSON.stringify(error.response.body, null, 2));
+        }
+
+        return JSON.stringify({
+            success: false,
+            message: `Error al enviar correos: ${error.message}`,
+            details: {
+                errorType: error.code || 'unknown',
+                errorMessage: error.message,
+                clientEmail,
+                method: "sendgrid_array_official"
+            }
+        });
+    }
+}
+
+/**
+ * Busca información específica en los documentos de autos almacenados en Supabase
+ * @param query - La consulta del usuario para buscar en los documentos de autos
+ * @returns Resultados de la búsqueda o mensaje de error
+ */
+export async function searchAutosDocuments(query: string): Promise<string> {
+    console.log('🚗 Buscando en documentos de autos:', query);
+
+    try {
+        const supabase = createSupabaseClient();
+
+        // 🔍 PASO 1: Verificar estructura de la tabla y contar registros
+        console.log('🔍 Verificando estructura de la tabla autos_documents...');
+        const { data: countData, error: countError } = await supabase
+            .from('autos_documents')
+            .select('*', { count: 'exact', head: true });
+
+        if (countError) {
+            console.error('❌ Error al verificar tabla autos_documents:', countError);
+            throw countError;
+        }
+
+        console.log(`📊 Total de registros en autos_documents: ${countData?.length || 'N/A'}`);
+
+        // 🔍 PASO 2: Realizar múltiples tipos de búsqueda
+        console.log('🔄 Intentando búsqueda específica con query:', query);
+
+        // Búsqueda principal
+        let { data: autosResults, error } = await supabase
+            .from('autos_documents')
+            .select('id, content, metadata')
+            .ilike('content', `%${query}%`)
+            .limit(5);
+
+        if (error) {
+            console.error('❌ Error en búsqueda principal:', error);
+        }
+
+        // Si no encuentra resultados, intentar con términos generales
+        if (!autosResults || autosResults.length === 0) {
+            console.log('⚠️ Búsqueda específica sin resultados, intentando términos generales...');
+
+            const fallbackTerms = ['seguro', 'auto', 'vehículo', 'cobertura', 'precio'];
+
+            for (const term of fallbackTerms) {
+                const { data: fallbackData, error: fallbackError } = await supabase
+                    .from('autos_documents')
+                    .select('id, content, metadata')
+                    .ilike('content', `%${term}%`)
+                    .limit(3);
+
+                if (!fallbackError && fallbackData && fallbackData.length > 0) {
+                    console.log(`✅ Encontrados ${fallbackData.length} resultados con término: ${term}`);
+                    autosResults = fallbackData;
+                    break;
+                }
+            }
+        }
+
+        // Si aún no hay resultados, obtener cualquier registro para diagnóstico
+        if (!autosResults || autosResults.length === 0) {
+            console.log('⚠️ Sin resultados con términos generales, obteniendo muestras aleatorias...');
+
+            const { data: sampleData, error: sampleError } = await supabase
+                .from('autos_documents')
+                .select('id, content, metadata')
+                .limit(3);
+
+            if (!sampleError && sampleData && sampleData.length > 0) {
+                console.log(`📋 Mostrando ${sampleData.length} registros de muestra`);
+                autosResults = sampleData;
+            }
+        }
+
+        if (!autosResults || autosResults.length === 0) {
+            return "Lo siento, no encontré información específica sobre tu consulta en los documentos de seguros de autos. La tabla parece estar vacía o no accesible. ¿Podrías reformular tu pregunta o ser más específico?";
+        }
+
+        console.log('✅ Encontrados', autosResults.length, 'resultados en autos_documents');
+
+        // Formatear resultados usando la estructura correcta (sin title)
+        let response = "Según la información de nuestra base de datos de seguros de autos, esto es lo que encontré:\n\n";
+
+        autosResults.forEach((result, index) => {
+            // No hay columna title, usar un título genérico o extraer del metadata
+            const title = result.metadata?.title || `Documento de Seguros de Autos #${result.id}`;
+            response += `🚗 **${title}**\n`;
+            response += `${result.content}\n`;
+
+            if (result.metadata && typeof result.metadata === 'object') {
+                const metaStr = JSON.stringify(result.metadata);
+                if (metaStr !== '{}') {
+                    response += `📄 Información adicional: ${metaStr}\n`;
+                }
+            }
+
+            if (index < autosResults.length - 1) {
+                response += "\n---\n\n";
+            }
+        });
+
+        return response;
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Error al buscar en Supabase para seguros de autos:', errorMessage);
+        return "Lo siento, ocurrió un error al buscar en los documentos de seguros de autos. Por favor intenta nuevamente.";
+    }
+}
+
+/**
+ * Función de prueba para enviar un email simple de vida deudor
+ * @param clientEmail - Email del cliente
+ * @returns Resultado de la operación
+ */
+export async function testSendVidaDeudorEmail(clientEmail: string): Promise<string> {
+    console.log(`🧪 [TEST] Enviando email de prueba de Vida Deudor a: ${clientEmail}`);    const testMsg = {
+        to: clientEmail,
+        from: "notificaciones@asistenciacoltefinanciera.com",
+        subject: "🧪 TEST - Activación Vida Deudor",
+        text: `Hola,
+
+Este es un email de prueba para verificar que los correos de activación de Vida Deudor lleguen correctamente al cliente.
+
+Si recibes este correo, significa que la funcionalidad básica de envío está funcionando.
+
+Datos de la prueba:
+- Destinatario: ${clientEmail}
+- Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
+- Remitente verificado: notificaciones@asistenciacoltefinanciera.com
+
+Saludos,
+Sistema de Pruebas Coltefinanciera`,
+        html: `<h3>🧪 Email de Prueba - Vida Deudor</h3>
+        <p><strong>Hola,</strong></p>
+        <p>Este es un email de prueba para verificar que los correos de activación de Vida Deudor lleguen correctamente al cliente.</p>
+        <p>Si recibes este correo, significa que la funcionalidad básica de envío está funcionando.</p>
+        <h4>Datos de la prueba:</h4>
+        <ul>
+            <li><strong>Destinatario:</strong> ${clientEmail}</li>
+            <li><strong>Fecha:</strong> ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</li>
+            <li><strong>Remitente verificado:</strong> notificaciones@asistenciacoltefinanciera.com</li>
+        </ul>
+        <p><em>Saludos,<br>Sistema de Pruebas Coltefinanciera</em></p>`
     };
 
     if (!process.env.SENDGRID_API_KEY) {
         return JSON.stringify({
             success: false,
-            message: 'Error: El servicio de correo no está configurado (falta SENDGRID_API_KEY).'
+            message: 'Error: SENDGRID_API_KEY no configurado'
         });
     }
 
     try {
-        await sgMail.send(msg);
-        console.log(`✅ Correo de activación de Vida Deudor enviado exitosamente a ${clientEmail}`);
+        const result = await sgMail.send(testMsg);
+        console.log(`✅ [TEST] Email de prueba enviado exitosamente a ${clientEmail}`);
+        console.log(`   Status: ${(result[0] as any)?.statusCode || 'N/A'}`);
+
         return JSON.stringify({
             success: true,
-            message: `Correo de activación enviado exitosamente a ${clientEmail}. Tu asistencia Vida Deudor está ahora activa con 3 meses gratis.`
+            message: `Email de prueba enviado exitosamente a ${clientEmail}`,            details: {
+                statusCode: (result[0] as any)?.statusCode,
+                to: clientEmail,
+                from: "notificaciones@asistenciacoltefinanciera.com"
+            }
         });
     } catch (error: any) {
-        console.error('❌ Error al enviar el correo de activación con SendGrid:', error);
+        console.error(`❌ [TEST] Error enviando email de prueba:`, error);
         if (error.response) {
-            console.error(error.response.body);
+            console.error('   Detalles:', JSON.stringify(error.response.body, null, 2));
         }
+
         return JSON.stringify({
             success: false,
-            message: `Error al enviar el correo de activación: ${error.message}`
+            message: `Error enviando email de prueba: ${error.message}`,
+            details: {
+                errorType: error.code || 'unknown',
+                to: clientEmail
+            }
         });
     }
 }

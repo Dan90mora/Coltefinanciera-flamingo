@@ -1,16 +1,12 @@
 import dotenv from "dotenv";
 import { HumanMessage } from "@langchain/core/messages";
-import { RunnableConfig } from "@langchain/core/runnables";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
-import { AgentState } from "./agentState";
 import { llm } from "../config/llm";
 import { MESSAGES } from '../config/constants';
 import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, consultAutosSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool } from "../tools/tools";
 import { END } from "@langchain/langgraph";
-
 dotenv.config();
-
 const luciaServiceAgent = createReactAgent({
     llm,
     tools: [
@@ -30,30 +26,23 @@ const luciaServiceAgent = createReactAgent({
         updateVidaDeudorClientDataTool // <-- Nueva herramienta para actualizar datos de vida deudor
     ],
     stateModifier: new SystemMessage(MESSAGES.SYSTEM_LUCIA_SUPERVISOR_PROMPT)
-})
-
-export const luciaServiceNode = async (
-    state: typeof AgentState.State,
-    config?: RunnableConfig,
-  ) => {
+});
+export const luciaServiceNode = async (state, config) => {
     console.log("🕵️  [DEBUG] Estado recibido en luciaServiceNode:", JSON.stringify(state, null, 2));
     const phoneNumber = config?.configurable?.phone_number;
-
     // Identificación del cliente basada en el número de teléfono del remitente
     // SOLO se hace en el primer mensaje (cuando no está identificado)
     if (phoneNumber && !state.isClientIdentified) {
-      try {
-        const clientInfoString = await searchDentixClientTool.invoke({ phoneNumber });
-        if (clientInfoString && clientInfoString !== 'No se encontró un cliente con ese número.') {
-          // Cliente existente encontrado
-          const clientInfo = JSON.parse(clientInfoString);
-
-          let greeting;
-          if (clientInfo.service === 'vidadeudor') {
-            // Cliente existente con vida deudor: informar sobre beneficio especial
-            const productInfo = clientInfo.product ? `por haber adquirido tu ${clientInfo.product}` : 'por ser cliente y tener un servicio/crédito';
-
-            greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE ÚNICAMENTE: ${clientInfo.name} ya está registrado y tiene derecho a la asistencia Vida Deudor ${productInfo} con nosotros.
+        try {
+            const clientInfoString = await searchDentixClientTool.invoke({ phoneNumber });
+            if (clientInfoString && clientInfoString !== 'No se encontró un cliente con ese número.') {
+                // Cliente existente encontrado
+                const clientInfo = JSON.parse(clientInfoString);
+                let greeting;
+                if (clientInfo.service === 'vidadeudor') {
+                    // Cliente existente con vida deudor: informar sobre beneficio especial
+                    const productInfo = clientInfo.product ? `por haber adquirido tu ${clientInfo.product}` : 'por ser cliente y tener un servicio/crédito';
+                    greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE ÚNICAMENTE: ${clientInfo.name} ya está registrado y tiene derecho a la asistencia Vida Deudor ${productInfo} con nosotros.
 
 DATOS DEL CLIENTE (SOLO PARA PRIMERA INTERACCIÓN):
 - Nombre: ${clientInfo.name}
@@ -74,51 +63,47 @@ INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
 IMPORTANTE: En mensajes posteriores de esta misma conversación, NO repitas su nombre ni el producto constantemente. Manténte natural y directo sin mencionar información personal repetitivamente.
 
 TONO: Personalizado y beneficioso en el primer mensaje, natural y directo en mensajes siguientes.`;
-          } else {
-            // Cliente existente con otros servicios
-            greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE: El cliente ha sido identificado (${phoneNumber}): ${JSON.stringify(clientInfo)}. Salúdalo por su nombre (${clientInfo.name}) en este primer mensaje y procede a consultar al especialista adecuado. En mensajes posteriores, mantente natural sin repetir constantemente su información personal.`;
-          }
-
-          state.messages.push(new HumanMessage({ content: greeting, name: "system-notification" }));
-          state.isClientIdentified = true; // Marcar como identificado
-        } else {
-          // Cliente NO encontrado - Usuario nuevo
-          const newClientMessage = `Este es un USUARIO NUEVO (número ${phoneNumber} no registrado en la base de datos). Procede con el saludo estándar y ofrece los seguros disponibles según las opciones configuradas en el prompt.`;
-
-          state.messages.push(new HumanMessage({ content: newClientMessage, name: "system-notification" }));
-          state.isClientIdentified = false; // Marcar como NO identificado
+                }
+                else {
+                    // Cliente existente con otros servicios
+                    greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE: El cliente ha sido identificado (${phoneNumber}): ${JSON.stringify(clientInfo)}. Salúdalo por su nombre (${clientInfo.name}) en este primer mensaje y procede a consultar al especialista adecuado. En mensajes posteriores, mantente natural sin repetir constantemente su información personal.`;
+                }
+                state.messages.push(new HumanMessage({ content: greeting, name: "system-notification" }));
+                state.isClientIdentified = true; // Marcar como identificado
+            }
+            else {
+                // Cliente NO encontrado - Usuario nuevo
+                const newClientMessage = `Este es un USUARIO NUEVO (número ${phoneNumber} no registrado en la base de datos). Procede con el saludo estándar y ofrece los seguros disponibles según las opciones configuradas en el prompt.`;
+                state.messages.push(new HumanMessage({ content: newClientMessage, name: "system-notification" }));
+                state.isClientIdentified = false; // Marcar como NO identificado
+            }
         }
-      } catch (error) {
-        console.error("Error durante el reconocimiento del cliente:", error);
-        // En caso de error, tratar como usuario nuevo
-        const errorClientMessage = `Error al verificar cliente. Tratar como USUARIO NUEVO y proceder con opciones estándar de seguros.`;
-        state.messages.push(new HumanMessage({ content: errorClientMessage, name: "system-notification" }));
-        state.isClientIdentified = false;
-      }
+        catch (error) {
+            console.error("Error durante el reconocimiento del cliente:", error);
+            // En caso de error, tratar como usuario nuevo
+            const errorClientMessage = `Error al verificar cliente. Tratar como USUARIO NUEVO y proceder con opciones estándar de seguros.`;
+            state.messages.push(new HumanMessage({ content: errorClientMessage, name: "system-notification" }));
+            state.isClientIdentified = false;
+        }
     }
-
     const result = await luciaServiceAgent.invoke(state, config);
     const newLastMessage = result.messages[result.messages.length - 1];
-
     if (typeof newLastMessage.content === 'string') {
-      console.log(`💬 Lucia responde: ${newLastMessage.content.substring(0, 100)}...`);
+        console.log(`💬 Lucia responde: ${newLastMessage.content.substring(0, 100)}...`);
     }
-
     // Lucia siempre termina la conversación después de responder
     // El cliente necesitará enviar un nuevo mensaje para continuar
     return {
-      messages: [
-        new HumanMessage({
-          content: newLastMessage.content,
-          name: "LuciaService"
-        }),
-      ],
-      next: END, // Lucia siempre termina y espera nueva entrada del usuario
+        messages: [
+            new HumanMessage({
+                content: newLastMessage.content,
+                name: "LuciaService"
+            }),
+        ],
+        next: END, // Lucia siempre termina y espera nueva entrada del usuario
     };
 };
-
 // luciaServiceNode es un nodo que procesa mensajes para Lucia.
 // Lucia maneja toda la conversación, consulta a especialistas internamente cuando necesita información específica,
 // y responde al cliente como la única asesora experta en todos los tipos de seguros.
-
 export { luciaServiceAgent };

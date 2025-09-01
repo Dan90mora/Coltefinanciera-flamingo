@@ -1,0 +1,27 @@
+
+> multiagente-node-ts@1.0.0 start
+> npx tsx src/index.ts
+
+(node:14418) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+node:events:498
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3024
+    at Server.setupListenHandle [as _listen2] (node:net:1904:16)
+    at listenInCluster (node:net:1961:12)
+    at Server.listen (node:net:2063:7)
+    at Function.listen (/home/daniel/Documentos/Flamingo-Coltefinanciera/Coltefinanciera-flamingo-rama-mora/node_modules/express/lib/application.js:635:24)
+    at <anonymous> (/home/daniel/Documentos/Flamingo-Coltefinanciera/Coltefinanciera-flamingo-rama-mora/src/index.ts:28:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1940:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3024
+}
+
+Node.js v22.3.0

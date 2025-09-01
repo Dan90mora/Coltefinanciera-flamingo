@@ -8,6 +8,7 @@ import {
   //searchDentixDocuments,
   //searchCredintegralDocuments,
   searchBienestarDocuments,
+  searchAutosDocuments,
   searchDentixClientByPhone,
   registerDentixClient,
   sendPaymentLinkEmail,
@@ -21,7 +22,7 @@ export const extractPhoneNumberTool = tool(
     async (input: { message: string }) => {
       console.log(`📞 Tool: Extrayendo número de teléfono del mensaje: "${input.message}"`);
       const phoneNumber = extractPhoneNumber(input.message);
-      
+
       if (phoneNumber) {
         console.log(`✅ Tool response: Número de teléfono extraído: ${phoneNumber}`);
         return phoneNumber;
@@ -63,9 +64,9 @@ export const extractPhoneNumberTool = tool(
       description: "Obtiene información sobre tipos de seguros disponibles en Fenix Producciones. Usa esta tool cuando el cliente pregunte sobre seguros.",
       schema: z.object({
         insuranceType: z.union([
-          z.literal("hogar"), 
-          z.literal("comercial"), 
-          z.literal("equipos"), 
+          z.literal("hogar"),
+          z.literal("comercial"),
+          z.literal("equipos"),
           z.literal("responsabilidad civil")
         ]),
       }),
@@ -103,7 +104,7 @@ export const extractPhoneNumberTool = tool(
 export const searchDentixClientTool = tool(
     async ({ phoneNumber }: { phoneNumber: string }) => {
       console.log(`🔍 Tool: Buscando cliente con número: ${phoneNumber}`);
-      
+
       const clientInfo = await searchDentixClientByPhone(phoneNumber);
         // Formatear la respuesta para el LLM de manera clara
       if (clientInfo && clientInfo.name) {
@@ -142,21 +143,21 @@ export const consultDentixSpecialistTool = tool(
       try {
         const { searchDentixVectors } = await import('../functions/retrievers');
         const vectorResults = await searchDentixVectors(customerQuery);
-        
+
         if (!vectorResults || vectorResults.length === 0) {
           return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de Dentix. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro dental?';
         }
-        
+
         // Verificar si los resultados son realmente relevantes (umbral de similitud)
         const relevantResults = vectorResults.filter(result => result.similarity > 0.4);
-        
+
         if (relevantResults.length === 0) {
           return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de seguros dentales Dentix. Mi especialidad son los seguros dentales, copagos, coberturas y tratamientos odontológicos. ¿Podrías preguntarme algo relacionado con seguros dentales?';
         }
-        
+
         // Formatear respuesta como especialista usando SOLO resultados vectoriales relevantes
         let response = "Como especialista en seguros dentales Dentix, te proporciono esta información:\n\n";
-        
+
         relevantResults.forEach((result, index) => {
           const fileName = result.metadata?.fileName || 'Documento Dentix';
           response += `📋 **${fileName.replace('.txt', '')}**\n`;
@@ -164,7 +165,7 @@ export const consultDentixSpecialistTool = tool(
           response += `(Relevancia: ${(result.similarity * 100).toFixed(1)}%)\n`;
           if (index < relevantResults.length - 1) response += "\n---\n\n";
         });
-        
+
         console.log(`✅ Respuesta del especialista Dentix (Supabase): ${response.substring(0, 100)}...`);
         return response;
       } catch (error) {
@@ -186,7 +187,7 @@ export const consultCredintegralSpecialistTool = tool(    async ({ customerQuery
         // Detectar si la consulta es sobre cobertura/servicios o precios
       const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara/i.test(customerQuery);
       const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización/i.test(customerQuery);
-      
+
       // Consultar ÚNICAMENTE la base vectorial de Supabase para Credintegral
       try {
         const { searchCredintegralVectors } = await import('../functions/retrievers');
@@ -197,29 +198,29 @@ export const consultCredintegralSpecialistTool = tool(    async ({ customerQuery
         } else if (isPriceQuery) {
           searchQuery = `propuesta económica precio ${customerQuery}`;
         }
-        
+
         const vectorResults = await searchCredintegralVectors(searchQuery);
-        
+
         if (!vectorResults || vectorResults.length === 0) {
           return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de Credintegral. ¿Podrías reformular tu pregunta o ser más específico sobre el producto financiero?';
         }
-        
+
         // Verificar si los resultados son realmente relevantes (umbral de similitud)
         const relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
-        
+
         if (relevantResults.length === 0) {
           return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de seguros generales Credintegral. Mi especialidad son los seguros generales, de vida, familiares y de protección personal. ¿Podrías preguntarme algo relacionado con seguros generales?';
         }
           // Formatear respuesta como especialista usando SOLO resultados vectoriales relevantes
         let response = "Como especialista en seguros generales Credintegral, te proporciono esta información:\n\n";
-        
+
         // Si es una consulta sobre cobertura, dar contexto especial
         if (isCoverageQuery) {
           response = "Te explico sobre la cobertura y servicios que incluye el seguro de Credintegral:\n\n";
         } else if (isPriceQuery) {
           response = "Te explico sobre los precios y costos del seguro de Credintegral:\n\n";
         }
-        
+
         relevantResults.forEach((result, index) => {
           const fileName = result.metadata?.fileName || 'Documento Credintegral';
           response += `📋 **${fileName.replace('.txt', '')}**\n`;
@@ -227,7 +228,7 @@ export const consultCredintegralSpecialistTool = tool(    async ({ customerQuery
           response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
           if (index < relevantResults.length - 1) response += "\n---\n\n";
         });
-        
+
         console.log(`✅ Respuesta del especialista Credintegral (Supabase): ${response.substring(0, 100)}...`);
         return response;
       } catch (error) {
@@ -247,10 +248,10 @@ export const consultCredintegralSpecialistTool = tool(    async ({ customerQuery
 /*export const consultInsuranceSpecialistTool = tool(
     async ({ customerQuery }: { customerQuery: string }) => {
       console.log(`🏠 Lucia consulta al especialista Insurance (sin archivos locales): ${customerQuery}`);
-      
+
       // Analizar la consulta para determinar el tipo de seguro
       const query = customerQuery.toLowerCase();
-      
+
       // Función para determinar el tipo de seguro basado en palabras clave
       function determineInsuranceType(query: string): "hogar" | "comercial" | "equipos" | "responsabilidad civil" {
         // Palabras clave para cada tipo de seguro
@@ -258,7 +259,7 @@ export const consultCredintegralSpecialistTool = tool(    async ({ customerQuery
         const comercialKeywords = ['negocio', 'empresa', 'comercial', 'local', 'oficina', 'establecimiento'];
         const equiposKeywords = ['cámara', 'equipo', 'seguridad', 'alarma', 'cerca eléctrica', 'dispositivo'];
         const responsabilidadKeywords = ['responsabilidad', 'civil', 'daños a terceros', 'responsabilidad civil'];
-        
+
         // Verificar en orden de prioridad
         if (responsabilidadKeywords.some(keyword => query.includes(keyword))) {
           return 'responsabilidad civil';
@@ -272,20 +273,20 @@ export const consultCredintegralSpecialistTool = tool(    async ({ customerQuery
         if (hogarKeywords.some(keyword => query.includes(keyword))) {
           return 'hogar';
         }
-        
+
         // Por defecto, asumir hogar si no se puede determinar
         return 'hogar';
       }
-      
+
       // Consultar información de seguros usando SOLO datos internos (sin archivos locales)
       try {
         // Determinar el tipo de seguro basado en la consulta
         const insuranceType = determineInsuranceType(query);
         console.log(`🎯 Tipo de seguro identificado: ${insuranceType}`);
-        
+
         // Usar información estructurada interna en lugar de archivos locales
         const insuranceInfo = getInsuranceInfo(insuranceType);
-        
+
         // Formatear respuesta como especialista
         const response = `Como especialista en seguros de ${insuranceType}, te proporciono esta información específica:\n\n${insuranceInfo}`;
         console.log(`✅ Respuesta del especialista Insurance (datos internos): ${response.substring(0, 100)}...`);
@@ -360,7 +361,7 @@ export const consultVidaDeudorSpecialistTool = tool(    async ({ customerQuery, 
       console.log(`🛡️ Lucia consulta al especialista Vida Deudor: ${customerQuery}`);
       console.log(`👤 Información del cliente recibida:`, clientInfo);
       console.log(`📞 Número de teléfono recibido:`, phoneNumber);
-      
+
       try {
         // Si no tenemos información del cliente pero tenemos número, buscarla
         let finalClientInfo = clientInfo;
@@ -376,9 +377,33 @@ export const consultVidaDeudorSpecialistTool = tool(    async ({ customerQuery, 
             console.log(`✅ Información del cliente encontrada:`, finalClientInfo);
           }
         }
+
+        // 🚨 DETECTAR CONSULTAS DE ACTIVACIÓN - FILTRO CRÍTICO
+        const isActivationQuery = /activar|activación|activacion|proceder|adquirir|quiero.*vida.*deudor|sí.*quiero|me.*interesa.*proceder|confirmar.*activación|confirmar.*activacion/i.test(customerQuery);
+
+        if (isActivationQuery) {
+          console.log('🚨 [ACTIVACIÓN DETECTADA] Bloqueando consulta de documentos - el cliente quiere ACTIVAR, no usar servicios');
+          // Para activación, NO consultar documentos, solo dar respuesta de activación
+          return `🛡️ **PROCESO DE ACTIVACIÓN VIDA DEUDOR**
+
+¡Perfecto! Veo que quieres activar tu asistencia Vida Deudor.
+
+Para proceder con la activación necesito confirmar tus datos primero. El sistema mostrará automáticamente tu información registrada para que la verifiques.
+
+Una vez confirmados los datos, tu asistencia se activará inmediatamente con 3 meses completamente gratis.
+
+🎯 **Tu asistencia incluirá:**
+• Teleconsulta medicina general (2 eventos por año)
+• Telenutrición ilimitada
+• Telepsicología (2 eventos por año)
+• Descuentos en farmacias
+
+¿Estás listo para proceder con la activación?`;
+        }
+
           // DETECTAR CONSULTAS DE PRECIO Y RESPONDER SIN BUSCAR EN BASE DE DATOS
         const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta|cuestan|cuesta|cobran|cobrar/i.test(customerQuery);
-        
+
         if (isPriceQuery) {          console.log('💰 [PRECIO DETECTADO] Respondiendo con mensaje estándar para clientes existentes');
             // Mensaje simplificado sin repetir información del producto
           return `📞 **INFORMACIÓN IMPORTANTE SOBRE CONTINUIDAD**
@@ -397,25 +422,42 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
 
 ¿Te gustaría que te explique más sobre los servicios incluidos en tu asistencia?`;
         }
-        
+
         // 🎯 NUEVA LÓGICA SIMPLIFICADA: TODO de la BD = ESPECÍFICO, Sin BD = GENERAL con contactos
         const { searchVidaDeudorVectors } = await import('../functions/retrievers');
         const vectorResults = await searchVidaDeudorVectors(customerQuery);
           if (vectorResults && vectorResults.length > 0) {
-          console.log('✅ [INFORMACIÓN ENCONTRADA] Procesando resultados de asistenciavida_documents');
-          
-          // ✅ AGREGAR FILTRO DE RELEVANCIA como en otras herramientas
-          const relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
-          
+          console.log('✅ [INFORMACIÓN ENCONTRADA] Procesando resultados de asistenciavida_documents');          // ✅ AGREGAR FILTRO DE RELEVANCIA como en otras herramientas
+          let relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
+
+          // 🚨 FILTRO CRÍTICO: Excluir documentos de agendamiento durante consultas generales
+          // Los documentos ID 6 y 41 contienen información sobre cómo agendar servicios YA ACTIVADOS
+          // Estos documentos NO deben aparecer cuando alguien está consultando sobre activación o información general
+          const excludeSchedulingDocs = relevantResults.filter(result => {
+            // Excluir documentos que contienen información de agendamiento (4320020, enlinea.sdsigma.com)
+            const hasSchedulingInfo = result.content.includes('4320020') ||
+                                    result.content.includes('enlinea.sdsigma.com') ||
+                                    result.content.includes('agendar citas o asistencia') ||
+                                    result.content.includes('Canales de contacto para agendar');
+
+            if (hasSchedulingInfo) {
+              console.log(`🚫 [FILTRADO] Excluyendo documento ID ${result.id} - contiene información de agendamiento`);
+              return false;
+            }
+            return true;
+          });
+
+          relevantResults = excludeSchedulingDocs;
+
           if (relevantResults.length === 0) {
             console.log('❌ [SIN RELEVANCIA] Resultados encontrados pero sin relevancia suficiente');
             // Continuar al else (información general)
           } else {
             console.log('✅ [INFORMACIÓN ESPECÍFICA] Encontrada información relevante en asistenciavida_documents');
-            
+
             // ESPECÍFICO: Mostrar TODO lo que venga de la base de datos tal como está
             let response = '';
-            
+
             // Personalizar el encabezado según la información del cliente
             if (finalClientInfo && finalClientInfo.service === 'vidadeudor' && finalClientInfo.product) {
               response = `🎯 **Información sobre tu asistencia Vida Deudor:**\n\n`;
@@ -424,7 +466,7 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
             } else {
               response = '🛡️ Según nuestra base de datos de Vida Deudor, aquí tienes la información:\n\n';
             }
-            
+
             relevantResults.slice(0, 3).forEach((result, index) => {
               const fileName = result.metadata?.fileName || 'Documento Vida Deudor';
               response += `📋 **${fileName.replace('.txt', '')}**\n`;
@@ -432,7 +474,7 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
               response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
               if (index < relevantResults.length - 1) response += "\n---\n\n";
             });
-            
+
             console.log(`✅ Respuesta del especialista Vida Deudor (información): ${response.substring(0, 100)}...`);
             return response;
           }
@@ -440,7 +482,7 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
           // Si no hay resultados o no son relevantes, continuar al else
         if (!vectorResults || vectorResults.length === 0 || vectorResults.filter(result => result.final_rank > 0.01).length === 0) {
           console.log('❌ [INFORMACIÓN GENERAL] No hay resultados en asistenciavida_documents');
-          
+
           // GENERAL: Sin BD = proporcionar contactos (teléfonos, links, páginas web)
           return `🛡️ **Asistencia Vida Deudor - Información de Contacto**
 
@@ -464,7 +506,7 @@ Para obtener información específica sobre tu asistencia Vida Deudor, te recomi
 
 ¿Te gustaría que te ayude con alguna consulta general sobre seguros de vida o necesitas información sobre otro tema?`;
         }
-        
+
       } catch (error) {
         console.error('❌ Error consultando especialista Vida Deudor:', error);
         return 'Lo siento, ocurrió un problema técnico al acceder a la información de Vida Deudor. ¿Podrías intentar reformular tu consulta?';
@@ -487,13 +529,13 @@ Para obtener información específica sobre tu asistencia Vida Deudor, te recomi
 export const confirmAndUpdateClientDataTool = tool(
     async ({ phoneNumber, updates }: { phoneNumber: string; updates?: { name?: string; email?: string; phoneNumber?: string } }) => {
       console.log(`📋 Tool: Confirmando/actualizando datos del cliente con número: ${phoneNumber}`);
-      
+
       if (updates) {
         console.log(`✏️ Tool: Actualizaciones solicitadas:`, updates);
       } else {
         console.log(`📄 Tool: Solo mostrando datos actuales para confirmación`);
       }
-      
+
       const result = await confirmAndUpdateClientData(phoneNumber, updates);
       console.log(`✅ Tool response: ${result.substring(0, 150)}...`);
       return result;
@@ -612,17 +654,24 @@ export const consultBienestarSpecialistTool = tool(
 );
 
 export const sendVidaDeudorActivationEmailTool = tool(
-  async ({ clientName, clientEmail }: { clientName: string; clientEmail: string; }) => {
+  async ({ clientName, clientEmail, clientPhone, clientDocument }: {
+    clientName: string;
+    clientEmail: string;
+    clientPhone?: string;
+    clientDocument?: string;
+  }) => {
     const { sendVidaDeudorActivationEmail } = await import('../functions/functions');
-    const result = await sendVidaDeudorActivationEmail(clientName, clientEmail);
+    const result = await sendVidaDeudorActivationEmail(clientName, clientEmail, clientPhone, clientDocument);
     return result;
   },
   {
     name: "sendVidaDeudorActivationEmail",
-    description: "Envía un correo electrónico de activación especial para clientes existentes con servicio vida deudor que aceptan el seguro. Este correo NO incluye enlace de pago ya que obtienen 3 meses gratis. ÚSALO SOLO para clientes existentes con service='vidadeudor' cuando acepten el seguro.",
+    description: "Envía un correo electrónico de activación especial para clientes existentes con servicio vida deudor que aceptan el seguro. Este correo NO incluye enlace de pago ya que obtienen 3 meses gratis. ÚSALO SOLO para clientes existentes con service='vidadeudor' cuando acepten el seguro. También envía notificación al administrador con los datos del cliente.",
     schema: z.object({
       clientName: z.string().describe("El nombre completo del cliente existente."),
       clientEmail: z.string().describe("El correo electrónico del cliente existente."),
+      clientPhone: z.string().optional().describe("El número de teléfono del cliente (opcional)."),
+      clientDocument: z.string().optional().describe("El documento de identidad del cliente (opcional)."),
     }),
   }
 );
@@ -630,7 +679,7 @@ export const sendVidaDeudorActivationEmailTool = tool(
 export const showVidaDeudorClientDataTool = tool(
   async ({ phoneNumber }: { phoneNumber: string }) => {
     console.log(`🛡️ [VIDA DEUDOR] Tool: Mostrando datos para confirmación - Cliente: ${phoneNumber}`);
-    
+
     const { showVidaDeudorClientDataForConfirmation } = await import('../functions/functions');
     const result = await showVidaDeudorClientDataForConfirmation(phoneNumber);
     console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
@@ -646,13 +695,13 @@ export const showVidaDeudorClientDataTool = tool(
 );
 
 export const updateVidaDeudorClientDataTool = tool(
-  async ({ phoneNumber, updates }: { 
-    phoneNumber: string; 
-    updates: { document_id?: string; name?: string; phone_number?: string; email?: string } 
+  async ({ phoneNumber, updates }: {
+    phoneNumber: string;
+    updates: { document_id?: string; name?: string; phone_number?: string; email?: string }
   }) => {
     console.log(`🛡️ [VIDA DEUDOR] Tool: Actualizando datos del cliente: ${phoneNumber}`);
     console.log(`✏️ Tool: Actualizaciones solicitadas:`, updates);
-    
+
     const { updateVidaDeudorClientData } = await import('../functions/functions');
     const result = await updateVidaDeudorClientData(phoneNumber, updates);
     console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
@@ -671,4 +720,73 @@ export const updateVidaDeudorClientDataTool = tool(
       }).describe("Datos a actualizar del cliente")
     }),
   }
+);
+
+export const consultAutosSpecialistTool = tool(
+    async ({ customerQuery }: { customerQuery: string }) => {
+      console.log(`🚗 Lucia consulta al especialista Autos (tabla autos_documents): ${customerQuery}`);
+
+      try {
+        const { searchAutosDocuments } = await import('../functions/functions.js');
+        const searchResults = await searchAutosDocuments(customerQuery);
+
+        if (!searchResults || searchResults.includes("Lo siento, no encontré")) {
+          return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de seguros de autos. Mi especialidad son los seguros vehiculares, coberturas, protección automotriz y seguros de vehículos. ¿Podrías preguntarme algo relacionado con seguros de autos o vehículos?';
+        }
+
+        console.log(`✅ Respuesta del especialista Autos: ${searchResults.substring(0, 100)}...`);
+        return searchResults;
+      } catch (error) {
+        console.error('❌ Error consultando base de datos de seguros de autos:', error);
+        return 'Lo siento, no pude acceder a la base de datos de seguros de autos en este momento. Por favor intenta nuevamente o contacta a nuestro servicio al cliente.';
+      }
+    },
+    {
+      name: "consult_autos_specialist",
+      description: "Consulta al especialista en seguros de autos y vehículos usando la tabla autos_documents de Supabase. Obtiene información específica sobre seguros vehiculares, coberturas automotrices, beneficios y procedimientos. Úsala cuando el cliente pregunte sobre seguros de autos, vehículos, protección vehicular o seguros automotrices.",
+      schema: z.object({
+        customerQuery: z.string().describe("La consulta específica del cliente sobre seguros de autos que necesita respuesta especializada"),
+      }),
+    }
+);
+
+// Herramienta específica para el agente vehicular (búsqueda directa)
+export const searchAutosDocumentsTool = tool(
+    async ({ query }: { query: string }) => {
+      console.log(`🚗 [AGENTE VEHICULAR] Búsqueda directa en autos_documents: ${query}`);
+
+      try {
+        const { searchAutosDocuments } = await import('../functions/functions');
+        const searchResults = await searchAutosDocuments(query);
+        console.log(`✅ [AGENTE VEHICULAR] Resultados: ${searchResults.substring(0, 100)}...`);
+        return searchResults;
+      } catch (error) {
+        console.error('❌ [AGENTE VEHICULAR] Error en búsqueda:', error);
+        return "Lo siento, ocurrió un error al buscar en los documentos de seguros de autos. Por favor intenta nuevamente.";
+      }
+    },
+    {
+      name: "search_autos_documents",
+      description: "Busca información específica en los documentos de seguros de autos almacenados en Supabase. Úsala cuando necesites información sobre coberturas, precios, beneficios, procedimientos o cualquier detalle específico de los seguros vehiculares.",
+      schema: z.object({
+        query: z.string().describe("La consulta específica del usuario para buscar en los documentos de seguros de autos"),
+      }),
+    }
+);
+
+export const testVidaDeudorEmailTool = tool(
+    async ({ clientEmail }: { clientEmail: string }) => {
+        console.log(`🧪 Tool: Probando envío de email Vida Deudor a: ${clientEmail}`);
+        const { testSendVidaDeudorEmail } = await import('../functions/functions');
+        const result = await testSendVidaDeudorEmail(clientEmail);
+        console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
+        return result;
+    },
+    {
+        name: "test_vida_deudor_email",
+        description: "Herramienta de prueba para enviar un email de prueba de activación Vida Deudor. Úsala SOLO para hacer pruebas de funcionamiento del sistema de correos.",
+        schema: z.object({
+            clientEmail: z.string().describe("Email del cliente para enviar la prueba"),
+        }),
+    }
 );

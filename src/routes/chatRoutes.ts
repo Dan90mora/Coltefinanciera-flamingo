@@ -72,10 +72,10 @@ let globalConfig = {
 };
 
 // Endpoint específico para webhook de WhatsApp con ngrok
-router.post("/api/whatsapp", async (req, res) => {
+router.post("/api/seguros", async (req, res) => {
   res.setHeader("ngrok-skip-browser-warning", "true");
 
-  console.log("Webhook received at /api/whatsapp:", req.body);
+  console.log("Webhook received at /api/seguros:", req.body);
   console.log("Headers:", req.headers);
 
   const twiml = new MessagingResponse();
@@ -120,6 +120,10 @@ router.post("/api/whatsapp", async (req, res) => {
             'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
           }
         });
+
+        if (!response.body) {
+          throw new Error('No se pudo obtener el contenido del audio');
+        }
 
         const file = await toFile(response.body, 'recording.wav');
 
@@ -388,10 +392,70 @@ router.post("/api/whatsapp", async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Error in /api/whatsapp webhook:', error);
+    console.error("Error in /api/seguros webhook:", error);
     twiml.message("Lo siento, ocurrió un error. Por favor, intenta nuevamente.");
     res.writeHead(200, { 'Content-Type': 'text/xml' });
     res.end(twiml.toString());
+  }
+});
+
+// 🧪 ENDPOINT DE PRUEBA PARA EL AGENTE DE VEHÍCULOS
+router.post("/test", async (req, res) => {
+  try {
+    const { message, userInfo } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: "El campo 'message' es requerido" });
+    }
+
+    console.log('🧪 TEST: Mensaje recibido:', message);
+    console.log('🧪 TEST: Usuario:', userInfo);
+
+    // Simular configuración básica
+    const config = {
+      configurable: {
+        thread_id: userInfo?.phone || "test-user",
+        phone_number: userInfo?.phone || "+573001234567",
+      },
+    };
+
+    // Crear el estado inicial para el supervisor
+    const initialState = {
+      messages: [new HumanMessage({ content: message })],
+      next: "lucia_service" // Lucia siempre es el primer punto de contacto
+    };
+
+    // Invocar el supervisor que maneja todo el flujo con Lucia
+    const agentOutput = await graph.invoke(initialState, config);
+    const lastMessage = agentOutput.messages[agentOutput.messages.length - 1];
+
+    if (!lastMessage || typeof lastMessage.content !== "string") {
+      console.error("🧪 TEST Error: El mensaje de la IA es nulo o no es un string.");
+      return res.status(500).json({
+        error: "Error procesando el mensaje",
+        debug: { agentOutput, lastMessage }
+      });
+    }
+
+    const responseMessage = lastMessage.content;
+    console.log("🧪 TEST: Respuesta IA:", responseMessage);
+
+    res.json({
+      success: true,
+      response: responseMessage,
+      debug: {
+        totalMessages: agentOutput.messages.length,
+        finalAgent: agentOutput.next,
+        userInfo: userInfo
+      }
+    });
+
+  } catch (error) {
+    console.error('🧪 TEST Error:', error);
+    res.status(500).json({
+      error: "Error interno del servidor",
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 

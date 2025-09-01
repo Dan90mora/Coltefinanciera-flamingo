@@ -3,19 +3,31 @@ import { HumanMessage } from "@langchain/core/messages";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
-import { AgentState } from "./agentState";
-import { consultVidaDeudorSpecialistTool } from "../tools/tools";
-import { llm } from "../config/llm";
-import { MESSAGES } from '../config/constants';
+import { AgentState } from "./agentState.js";
+import {
+  consultVidaDeudorSpecialistTool,
+  sendVidaDeudorActivationEmailTool,
+  showVidaDeudorClientDataTool,
+  updateVidaDeudorClientDataTool,
+  searchDentixClientTool
+} from "../tools/tools.js";
+import { llm } from "../config/llm.js";
+import { MESSAGES } from '../config/constants.js';
 
 dotenv.config();
 
 const vidaDeudorServiceAgent = createReactAgent({
   llm,
-  tools: [ consultVidaDeudorSpecialistTool ],
+  tools: [
+    consultVidaDeudorSpecialistTool,
+    sendVidaDeudorActivationEmailTool,
+    showVidaDeudorClientDataTool,
+    updateVidaDeudorClientDataTool,
+    searchDentixClientTool
+  ],
   stateModifier: new SystemMessage(MESSAGES.SYSTEM_VIDA_DEUDOR_PROMPT)
-})
-  
+});
+
 export const vidaDeudorServiceNode = async (
   state: typeof AgentState.State,
   config?: RunnableConfig,
@@ -24,7 +36,10 @@ export const vidaDeudorServiceNode = async (
   const lastMessage = result.messages[result.messages.length - 1];
   return {
     messages: [
-      new HumanMessage({ content: lastMessage.content, name: "VidaDeudorService" }),
+      new HumanMessage({
+        content: lastMessage.content,
+        name: "vidaDeudorServiceAgent",
+      }),
     ],
     next: "supervisor",
   };
