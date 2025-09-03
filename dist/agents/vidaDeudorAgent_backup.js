@@ -16,13 +16,6 @@ const vidaDeudorServiceAgent = createReactAgent({
         searchDentixClientTool
     ],
     stateModifier: new SystemMessage(MESSAGES.SYSTEM_VIDA_DEUDOR_PROMPT)
-}), m;
-"dotenv";
-dotenv.config();
-const vidaDeudorServiceAgent = createReactAgent({
-    llm,
-    tools: [consultVidaDeudorSpecialistTool],
-    stateModifier: new SystemMessage(MESSAGES.SYSTEM_VIDA_DEUDOR_PROMPT)
 });
 export const vidaDeudorServiceNode = async (state, config) => {
     const result = await vidaDeudorServiceAgent.invoke(state, config);

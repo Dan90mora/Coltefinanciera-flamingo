@@ -10,10 +10,12 @@ import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/
 import { ElevenLabsClient } from 'elevenlabs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { saveChatHistory } from "../utils/saveHistoryDb";
-import { getAvailableChatOn } from "../utils/getAvailableChatOn";
-import { getAvailableForAudio } from "../utils/getAvailableForAudio";
-import { graph } from "../supervisor";
+import { saveChatHistory } from "../utils/saveHistoryDb.js";
+import { getAvailableChatOn } from "../utils/getAvailableChatOn.js";
+import { getAvailableForAudio } from "../utils/getAvailableForAudio.js";
+import { graph } from "../supervisor.js";
+import fs from 'fs';
+import ffmpeg from 'fluent-ffmpeg';
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +23,22 @@ dotenv.config();
 const MessagingResponse = twilio.twiml.MessagingResponse;
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioWhatsAppNumber = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+5742044840";
 const client = twilio(accountSid, authToken);
+// Función para verificar configuración de Twilio
+const verifyTwilioConfig = () => {
+    console.log("🔧 VERIFICACIÓN CONFIGURACIÓN TWILIO:");
+    console.log("  🔑 Account SID:", accountSid ? `${accountSid.substring(0, 10)}...` : '❌ NO CONFIGURADO');
+    console.log("  🔐 Auth Token:", authToken ? `${authToken.substring(0, 10)}...` : '❌ NO CONFIGURADO');
+    console.log("  📞 WhatsApp Number:", twilioWhatsAppNumber);
+    if (!accountSid || !authToken) {
+        console.error("❌ CONFIGURACIÓN INCOMPLETA DE TWILIO - Verifica las variables de entorno");
+        return false;
+    }
+    return true;
+};
+// Verificar configuración al cargar el módulo
+verifyTwilioConfig();
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
@@ -59,9 +76,9 @@ let globalConfig = {
     },
 };
 // Endpoint específico para webhook de WhatsApp con ngrok
-router.post("/api/seguros", async (req, res) => {
+router.post("/seguros/whatsapp", async (req, res) => {
     res.setHeader("ngrok-skip-browser-warning", "true");
-    console.log("Webhook received at /api/seguros:", req.body);
+    console.log("Webhook received at /seguros/whatsapp:", req.body);
     console.log("Headers:", req.headers);
     const twiml = new MessagingResponse();
     const from = req.body.From;
@@ -261,17 +278,58 @@ router.post("/api/seguros", async (req, res) => {
                         throw new Error(`Upload failed: ${error.message}`);
                     }, async () => {
                         // Subida completada
-                        const audioUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                        // Envía el archivo de audio a través de Twilio
-                        await client.messages.create({
-                            //body: "Audio message",
-                            from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
-                            to: `whatsapp:${fromNumber}`,
-                            mediaUrl: [audioUrl],
-                        });
-                        console.log("Audio message sent successfully");
-                        res.writeHead(200, { "Content-Type": "text/xml" });
-                        res.end(twiml.toString());
+                        try {
+                            const audioUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                            console.log("🎵 AUDIO SYSTEM - Preparando envío de audio:");
+                            console.log("  📁 Audio URL:", audioUrl);
+                            console.log("  📞 From:", twilioWhatsAppNumber);
+                            console.log("  📱 To:", `whatsapp:${fromNumber}`);
+                            console.log("  🔑 Account SID:", accountSid ? `${accountSid.substring(0, 10)}...` : 'NO CONFIGURADO');
+                            // Envía el archivo de audio a través de Twilio
+                            const audioMessage = await client.messages.create({
+                                //body: "Audio message",
+                                // from: "whatsapp:+14155238886",
+                                from: twilioWhatsAppNumber,
+                                to: `whatsapp:${fromNumber}`,
+                                mediaUrl: [audioUrl],
+                            });
+                            console.log("✅ Audio message sent successfully, SID:", audioMessage.sid);
+                            res.writeHead(200, { "Content-Type": "text/xml" });
+                            res.end(twiml.toString());
+                        }
+                        catch (twilioError) {
+                            console.error("❌ ERROR DETALLADO TWILIO AUDIO:", {
+                                error: twilioError?.message || 'Unknown error',
+                                code: twilioError?.code || 'No code',
+                                status: twilioError?.status || 'No status',
+                                details: twilioError?.details || 'No details',
+                                from: twilioWhatsAppNumber,
+                                to: `whatsapp:${fromNumber}`
+                            });
+                            // Enviar mensaje de texto como fallback
+                            try {
+                                console.log("🔄 Intentando fallback con mensaje de texto...");
+                                const fallbackMessage = await client.messages.create({
+                                    body: responseMessage,
+                                    from: twilioWhatsAppNumber,
+                                    to: `whatsapp:${fromNumber}`,
+                                });
+                                console.log("✅ Fallback text message sent successfully, SID:", fallbackMessage.sid);
+                            }
+                            catch (fallbackError) {
+                                console.error("❌ ERROR DETALLADO TWILIO FALLBACK:", {
+                                    error: fallbackError?.message || 'Unknown error',
+                                    code: fallbackError?.code || 'No code',
+                                    status: fallbackError?.status || 'No status',
+                                    details: fallbackError?.details || 'No details',
+                                    from: twilioWhatsAppNumber,
+                                    to: `whatsapp:${fromNumber}`
+                                });
+                                twiml.message("Lo siento, ocurrió un error técnico. Por favor, intenta nuevamente.");
+                            }
+                            res.writeHead(200, { "Content-Type": "text/xml" });
+                            res.end(twiml.toString());
+                        }
                     });
                 }
                 catch (error) {
@@ -289,11 +347,27 @@ router.post("/api/seguros", async (req, res) => {
                     // eslint-disable-next-line prefer-const
                     for (let part of messageParts) {
                         if (part !== "") {
-                            await client.messages.create({
-                                body: part,
-                                from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
-                                to: `whatsapp:${fromNumber}`,
-                            });
+                            try {
+                                console.log("📤 ENVÍO MENSAJE LARGO - Parte:", part.substring(0, 50) + "...");
+                                console.log("  📞 From:", twilioWhatsAppNumber);
+                                console.log("  📱 To:", `whatsapp:${fromNumber}`);
+                                const partMessage = await client.messages.create({
+                                    body: part,
+                                    // from: "whatsapp:+14155238886",
+                                    from: twilioWhatsAppNumber,
+                                    to: `whatsapp:${fromNumber}`,
+                                });
+                                console.log("✅ Parte del mensaje enviada, SID:", partMessage.sid);
+                            }
+                            catch (partError) {
+                                console.error("❌ ERROR ENVIANDO PARTE DEL MENSAJE:", {
+                                    error: partError?.message || 'Unknown error',
+                                    code: partError?.code || 'No code',
+                                    part: part.substring(0, 100) + "...",
+                                    from: twilioWhatsAppNumber,
+                                    to: `whatsapp:${fromNumber}`
+                                });
+                            }
                             console.log(part);
                             console.log("-------------------");
                         }
@@ -301,15 +375,27 @@ router.post("/api/seguros", async (req, res) => {
                 }
                 else {
                     try {
+                        console.log("📤 ENVÍO MENSAJE NORMAL:");
+                        console.log("  📝 Mensaje:", responseMessage.substring(0, 100) + (responseMessage.length > 100 ? "..." : ""));
+                        console.log("  📞 From:", twilioWhatsAppNumber);
+                        console.log("  📱 To:", `whatsapp:${fromNumber}`);
                         const message = await client.messages.create({
                             body: responseMessage,
-                            from: process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886",
+                            // from: "whatsapp:+14155238886",
+                            from: twilioWhatsAppNumber,
                             to: `whatsapp:${fromNumber}`,
                         });
-                        console.log("Message sent successfully:", message.sid);
+                        console.log("✅ Message sent successfully, SID:", message.sid);
                     }
                     catch (error) {
-                        console.error("Error sending message:", error);
+                        console.error("❌ ERROR DETALLADO TWILIO MENSAJE NORMAL:", {
+                            error: error?.message || 'Unknown error',
+                            code: error?.code || 'No code',
+                            status: error?.status || 'No status',
+                            from: twilioWhatsAppNumber,
+                            to: `whatsapp:${fromNumber}`,
+                            messageLength: responseMessage.length
+                        });
                     }
                 }
                 // Responder con TwiML vacío para confirmar recepción
@@ -325,62 +411,116 @@ router.post("/api/seguros", async (req, res) => {
         }
     }
     catch (error) {
-        console.error("Error in /api/seguros webhook:", error);
+        console.error('Error in /api/whatsapp webhook:', error);
         twiml.message("Lo siento, ocurrió un error. Por favor, intenta nuevamente.");
         res.writeHead(200, { 'Content-Type': 'text/xml' });
         res.end(twiml.toString());
     }
 });
-// 🧪 ENDPOINT DE PRUEBA PARA EL AGENTE DE VEHÍCULOS
-router.post("/test", async (req, res) => {
+router.post('/seguros/chat-dashboard', async (req, res) => {
+    console.log('Request body:', req.body.clientNumber, req.body.newMessage);
     try {
-        const { message, userInfo } = req.body;
-        if (!message) {
-            return res.status(400).json({ error: "El campo 'message' es requerido" });
-        }
-        console.log('🧪 TEST: Mensaje recibido:', message);
-        console.log('🧪 TEST: Usuario:', userInfo);
-        // Simular configuración básica
-        const config = {
-            configurable: {
-                thread_id: userInfo?.phone || "test-user",
-                phone_number: userInfo?.phone || "+573001234567",
-            },
-        };
-        // Crear el estado inicial para el supervisor
-        const initialState = {
-            messages: [new HumanMessage({ content: message })],
-            next: "lucia_service" // Lucia siempre es el primer punto de contacto
-        };
-        // Invocar el supervisor que maneja todo el flujo con Lucia
-        const agentOutput = await graph.invoke(initialState, config);
-        const lastMessage = agentOutput.messages[agentOutput.messages.length - 1];
-        if (!lastMessage || typeof lastMessage.content !== "string") {
-            console.error("🧪 TEST Error: El mensaje de la IA es nulo o no es un string.");
-            return res.status(500).json({
-                error: "Error procesando el mensaje",
-                debug: { agentOutput, lastMessage }
+        const twiml = new MessagingResponse();
+        const { clientNumber, newMessage } = req.body;
+        const isAudioMessage = await newMessage.includes('https://firebasestorage.googleapis.com/v0/b/ultim-admin-dashboard.appspot.com/o/audios');
+        const isFileMessage = await newMessage.includes('https://firebasestorage.googleapis.com/v0/b/ultim-admin-dashboard.appspot.com/o/documents');
+        if (isAudioMessage) {
+            console.log('Audio message detected');
+            // Descargar el archivo desde Firebase
+            const audioUrl = newMessage;
+            const response = await fetch(audioUrl);
+            const audioBuffer = await response.buffer();
+            const tempDir = path.join(__dirname, '../temp'); // Subir un nivel desde routes
+            const tempInputPath = path.join(tempDir, 'tempInput.webm');
+            const tempOutputPath = path.join(tempDir, 'tempOutput.mp3');
+            // Guardar el archivo temporal
+            fs.writeFileSync(tempInputPath, new Uint8Array(audioBuffer));
+            // Convertir a formato OGG usando ffmpeg
+            await new Promise((resolve, reject) => {
+                ffmpeg(tempInputPath)
+                    .output(tempOutputPath)
+                    .inputOptions('-f', 'webm')
+                    .audioCodec('libmp3lame')
+                    .on('start', (commandLine) => {
+                    console.log('Comando FFmpeg:', commandLine);
+                })
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .run();
+            });
+            // Subir el audio convertido a Firebase Storage a la capeta audios
+            const audioName = `audio_${uuidv4()}.mp3`;
+            const storageRef = ref(storage, `ogg/${audioName}`);
+            const metadata = {
+                contentType: 'audio/mpeg',
+            };
+            const uploadTask = uploadBytesResumable(storageRef, fs.readFileSync(tempOutputPath), metadata);
+            console.log('Nombre creado', audioName);
+            // Esperar a que la subida complete y obtener la URL pública
+            uploadTask.on('state_changed', (snapshot) => {
+                // Progreso de la subida (opcional)
+                console.log('Upload is in progress...');
+            }, (error) => {
+                throw new Error(`Upload failed: ${error.message}`);
+            }, async () => {
+                // Subida completada
+                const audioUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                console.log('Audio URL:', audioUrl);
+                // Envía el archivo de audio a través de Twilio
+                await client.messages.create({
+                    body: "Audio message",
+                    to: `whatsapp:${clientNumber}`,
+                    // from: "whatsapp:+14155238886",
+                    from: twilioWhatsAppNumber,
+                    mediaUrl: [audioUrl],
+                });
+                // Limpiar archivos temporales
+                fs.unlinkSync(tempInputPath);
+                fs.unlinkSync(tempOutputPath);
+                console.log('Audio message sent successfully', audioUrl);
+                res.writeHead(200, { 'Content-Type': 'text/xml' });
+                res.end(twiml.toString());
             });
         }
-        const responseMessage = lastMessage.content;
-        console.log("🧪 TEST: Respuesta IA:", responseMessage);
-        res.json({
-            success: true,
-            response: responseMessage,
-            debug: {
-                totalMessages: agentOutput.messages.length,
-                finalAgent: agentOutput.next,
-                userInfo: userInfo
-            }
-        });
+        else if (isFileMessage) {
+            console.log('File message detected');
+            const message = await client.messages.create({
+                body: 'Mensaje con archivo',
+                to: `whatsapp:${clientNumber}`,
+                // from: "whatsapp:+14155238886",
+                from: twilioWhatsAppNumber,
+                mediaUrl: [newMessage],
+            });
+            console.log('File message sent successfully:', message.sid);
+            res.writeHead(200, { 'Content-Type': 'text/xml' });
+            res.end(twiml.toString());
+        }
+        else {
+            // Enviar mensaje a través de Twilio
+            const message = await client.messages.create({
+                // from: "whatsapp:+14155238886",
+                from: twilioWhatsAppNumber,
+                to: `whatsapp:${clientNumber}`,
+                body: newMessage
+            });
+            // Enviar respuesta al frontend
+            res.status(200).send({
+                success: true,
+                message: 'Mensaje enviado exitosamente',
+                sid: message.sid
+            });
+        }
     }
     catch (error) {
-        console.error('🧪 TEST Error:', error);
-        res.status(500).json({
-            error: "Error interno del servidor",
-            details: error instanceof Error ? error.message : String(error)
+        console.error('Error in chat route:', error);
+        res.status(500).send({
+            error: error instanceof Error ? error.message : "An unknown error occurred"
         });
     }
+});
+// Ruta Health Check
+router.get('/seguros/health', async (req, res) => {
+    res.status(200).json({ success: true, message: 'API is healthy - Seguros' });
 });
 export default router;
 export { exportedFromNumber };

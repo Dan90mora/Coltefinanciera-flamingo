@@ -36,10 +36,7 @@ export const vidaDeudorServiceNode = async (
   const lastMessage = result.messages[result.messages.length - 1];
   return {
     messages: [
-      new HumanMessage({
-        content: lastMessage.content,
-        name: "vidaDeudorServiceAgent",
-      }),
+      new HumanMessage({ content: lastMessage.content, name: "VidaDeudorService" }),
     ],
     next: "supervisor",
   };

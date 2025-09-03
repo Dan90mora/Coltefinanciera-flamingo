@@ -1,5 +1,5 @@
 //import colombia from '../data/colombia.json';
-import { searchDentixVectors, searchCredintegralVectors } from './retrievers';
+import { searchDentixVectors, searchCredintegralVectors } from './retrievers.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import sgMail from '@sendgrid/mail';
@@ -1038,7 +1038,7 @@ Coltefinanciera Seguros`,
             }
         },
         {
-            to: "danielmoyemanizales@gmail.com",
+            to: "mariana.b@ultimmarketing.com",
             from: {
                 email: "notificaciones@asistenciacoltefinanciera.com",
                 name: "Sistema Coltefinanciera"
@@ -1079,7 +1079,7 @@ Sistema Coltefinanciera`,
     try {
         console.log('📧 USANDO MÉTODO OFICIAL SENDGRID: Array de emails');
         console.log(`   📧 Email 1: Cliente (${clientEmail})`);
-        console.log(`   📧 Email 2: Admin (danielmoyemanizales@gmail.com)`);
+        console.log(`   📧 Email 2: Admin (mariana.b@ultimmarketing.com)`);
 
         const results = await sgMail.send(multipleMessages);
 
@@ -1099,7 +1099,7 @@ Sistema Coltefinanciera`,
             if (email === clientEmail) {
                 clientSent = true;
                 clientMessageId = messageId;
-            } else if (email === "danielmoyemanizales@gmail.com") {
+            } else if (email === "mariana.b@ultimmarketing.com") {
                 adminSent = true;
                 adminMessageId = messageId;
             }

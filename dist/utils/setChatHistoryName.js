@@ -1,7 +1,11 @@
 // Guardar hustorial de conversación en Supabase
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+<<<<<<< HEAD
 import { exportedFromNumber } from '../routes/chatRoutes';
+=======
+import { exportedFromNumber } from '../routes/chatRoutes.js';
+>>>>>>> origin/main
 dotenv.config();
 // Supabase connection
 const supabaseUrl = process.env.SUPABASE_URL;

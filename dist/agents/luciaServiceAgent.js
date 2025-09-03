@@ -2,9 +2,9 @@ import dotenv from "dotenv";
 import { HumanMessage } from "@langchain/core/messages";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
-import { llm } from "../config/llm";
-import { MESSAGES } from '../config/constants';
-import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, consultAutosSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool } from "../tools/tools";
+import { llm } from "../config/llm.js";
+import { MESSAGES } from '../config/constants.js';
+import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool } from "../tools/tools.js";
 import { END } from "@langchain/langgraph";
 dotenv.config();
 const luciaServiceAgent = createReactAgent({
@@ -55,7 +55,7 @@ INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
 1. **SALUDO PERSONALIZADO:** Salúdalo por su nombre de manera cálida (SOLO EN ESTE PRIMER MENSAJE)
 2. **BENEFICIO ESPECIAL CON PRODUCTO:** Infórmale que ${productInfo} con nosotros, tiene derecho a la asistencia Vida Deudor (SOLO EN ESTE PRIMER MENSAJE)
 3. **IMPORTANTE:** Si tiene 'product', usa el nombre EXACTO del producto (${clientInfo.product}) en tu respuesta, NO uses palabras genéricas (SOLO EN ESTE PRIMER MENSAJE)
-4. **TERMINOLOGÍA:** SIEMPRE usa "asistencia Vida Deudor" NO "seguro Vida Deudor"
+4. **TERMINOLOGÍA:** SIEMPRE usa "asistencia Vida Deudor" NO "seguro Vida Deudor" 
 5. **MENSAJE INICIAL:** Menciona que tiene derecho a activar este beneficio y describe brevemente los servicios incluidos (teleconsulta, telenutrición, telepsicología, descuentos en farmacias) sin mencionar meses gratis
 6. **PRECIO ESPECIAL:** Solo si pregunta específicamente por precio, entonces menciona los 3 meses gratis
 7. **PROCESO DE ACTIVACIÓN INMEDIATA:** Si menciona "quiero activar", "activar", "proceder", "adquirir" - usa INMEDIATAMENTE showVidaDeudorClientDataTool con el número ${phoneNumber} (NO preguntes nada más)

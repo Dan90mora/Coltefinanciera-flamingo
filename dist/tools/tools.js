@@ -2,8 +2,8 @@ import dotenv from "dotenv";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 //import { contactCustomerService, getProductInfo, troubleshootIssue, getInsuranceInfo, searchDentixDocuments, searchCredintegralDocuments, searchBienestarDocuments, searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail, confirmAndUpdateClientData } from "../functions/functions";
-import { searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail, confirmAndUpdateClientData, } from "../functions/functions";
-import { extractPhoneNumber } from "../utils/phoneUtils";
+import { searchDentixClientByPhone, registerDentixClient, sendPaymentLinkEmail, confirmAndUpdateClientData, } from "../functions/functions.js";
+import { extractPhoneNumber } from "../utils/phoneUtils.js";
 dotenv.config();
 export const extractPhoneNumberTool = tool(async (input) => {
     console.log(`📞 Tool: Extrayendo número de teléfono del mensaje: "${input.message}"`);
@@ -115,7 +115,7 @@ export const consultDentixSpecialistTool = tool(async ({ customerQuery }) => {
     console.log(`🦷 Lucia consulta al especialista Dentix (SOLO Supabase): ${customerQuery}`);
     // Consultar ÚNICAMENTE la base vectorial de Supabase para Dentix
     try {
-        const { searchDentixVectors } = await import('../functions/retrievers');
+        const { searchDentixVectors } = await import('../functions/retrievers.js');
         const vectorResults = await searchDentixVectors(customerQuery);
         if (!vectorResults || vectorResults.length === 0) {
             return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de Dentix. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro dental?';
@@ -156,7 +156,7 @@ export const consultCredintegralSpecialistTool = tool(async ({ customerQuery }) 
     const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización/i.test(customerQuery);
     // Consultar ÚNICAMENTE la base vectorial de Supabase para Credintegral
     try {
-        const { searchCredintegralVectors } = await import('../functions/retrievers');
+        const { searchCredintegralVectors } = await import('../functions/retrievers.js');
         // Si es una consulta sobre cobertura, buscar específicamente con términos relacionados
         let searchQuery = customerQuery;
         if (isCoverageQuery) {
@@ -208,10 +208,10 @@ export const consultCredintegralSpecialistTool = tool(async ({ customerQuery }) 
 /*export const consultInsuranceSpecialistTool = tool(
     async ({ customerQuery }: { customerQuery: string }) => {
       console.log(`🏠 Lucia consulta al especialista Insurance (sin archivos locales): ${customerQuery}`);
-
+      
       // Analizar la consulta para determinar el tipo de seguro
       const query = customerQuery.toLowerCase();
-
+      
       // Función para determinar el tipo de seguro basado en palabras clave
       function determineInsuranceType(query: string): "hogar" | "comercial" | "equipos" | "responsabilidad civil" {
         // Palabras clave para cada tipo de seguro
@@ -219,7 +219,7 @@ export const consultCredintegralSpecialistTool = tool(async ({ customerQuery }) 
         const comercialKeywords = ['negocio', 'empresa', 'comercial', 'local', 'oficina', 'establecimiento'];
         const equiposKeywords = ['cámara', 'equipo', 'seguridad', 'alarma', 'cerca eléctrica', 'dispositivo'];
         const responsabilidadKeywords = ['responsabilidad', 'civil', 'daños a terceros', 'responsabilidad civil'];
-
+        
         // Verificar en orden de prioridad
         if (responsabilidadKeywords.some(keyword => query.includes(keyword))) {
           return 'responsabilidad civil';
@@ -233,20 +233,20 @@ export const consultCredintegralSpecialistTool = tool(async ({ customerQuery }) 
         if (hogarKeywords.some(keyword => query.includes(keyword))) {
           return 'hogar';
         }
-
+        
         // Por defecto, asumir hogar si no se puede determinar
         return 'hogar';
       }
-
+      
       // Consultar información de seguros usando SOLO datos internos (sin archivos locales)
       try {
         // Determinar el tipo de seguro basado en la consulta
         const insuranceType = determineInsuranceType(query);
         console.log(`🎯 Tipo de seguro identificado: ${insuranceType}`);
-
+        
         // Usar información estructurada interna en lugar de archivos locales
         const insuranceInfo = getInsuranceInfo(insuranceType);
-
+        
         // Formatear respuesta como especialista
         const response = `Como especialista en seguros de ${insuranceType}, te proporciono esta información específica:\n\n${insuranceInfo}`;
         console.log(`✅ Respuesta del especialista Insurance (datos internos): ${response.substring(0, 100)}...`);
@@ -493,8 +493,8 @@ export const consultBienestarSpecialistTool = tool(async ({ customerQuery }) => 
     const isBenefitQuery = /beneficio|beneficios|ventajas/i.test(customerQuery);
     const isAssistQuery = /asistencial|asistenciales|asistencia/i.test(customerQuery);
     try {
-        const { searchBienestarVectors } = await import('../functions/retrievers');
-        const { extractBienestarSection } = await import('../functions/functions');
+        const { searchBienestarVectors } = await import('../functions/retrievers.js');
+        const { extractBienestarSection } = await import('../functions/functions.js');
         let searchQuery = customerQuery;
         // Si es consulta de precio/costo/valor/tarifa, forzar búsqueda por 'tarifa'
         if (isPriceQuery) {
@@ -604,7 +604,7 @@ export const consultBienestarSpecialistTool = tool(async ({ customerQuery }) => 
     }),
 });
 export const sendVidaDeudorActivationEmailTool = tool(async ({ clientName, clientEmail, clientPhone, clientDocument }) => {
-    const { sendVidaDeudorActivationEmail } = await import('../functions/functions');
+    const { sendVidaDeudorActivationEmail } = await import('../functions/functions.js');
     const result = await sendVidaDeudorActivationEmail(clientName, clientEmail, clientPhone, clientDocument);
     return result;
 }, {
@@ -619,7 +619,7 @@ export const sendVidaDeudorActivationEmailTool = tool(async ({ clientName, clien
 });
 export const showVidaDeudorClientDataTool = tool(async ({ phoneNumber }) => {
     console.log(`🛡️ [VIDA DEUDOR] Tool: Mostrando datos para confirmación - Cliente: ${phoneNumber}`);
-    const { showVidaDeudorClientDataForConfirmation } = await import('../functions/functions');
+    const { showVidaDeudorClientDataForConfirmation } = await import('../functions/functions.js');
     const result = await showVidaDeudorClientDataForConfirmation(phoneNumber);
     console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
     return result;
@@ -633,7 +633,7 @@ export const showVidaDeudorClientDataTool = tool(async ({ phoneNumber }) => {
 export const updateVidaDeudorClientDataTool = tool(async ({ phoneNumber, updates }) => {
     console.log(`🛡️ [VIDA DEUDOR] Tool: Actualizando datos del cliente: ${phoneNumber}`);
     console.log(`✏️ Tool: Actualizaciones solicitadas:`, updates);
-    const { updateVidaDeudorClientData } = await import('../functions/functions');
+    const { updateVidaDeudorClientData } = await import('../functions/functions.js');
     const result = await updateVidaDeudorClientData(phoneNumber, updates);
     console.log(`✅ Tool response: ${result.substring(0, 200)}...`);
     return result;

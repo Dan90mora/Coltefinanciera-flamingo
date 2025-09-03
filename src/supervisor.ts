@@ -4,13 +4,13 @@ import { z } from "zod";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { START, StateGraph } from "@langchain/langgraph";
 import { MemorySaver } from "@langchain/langgraph";
-import { AgentState } from "./agents/agentState";
-import { dentixServiceNode } from "./agents/dentixServiceAgent";
-import { credintegralServiceNode } from "./agents/credintegralServiceAgent";
-import { vidaDeudorServiceNode } from "./agents/vidaDeudorAgent";
-import { insuranceServiceNode } from "./agents/insuranceServiceAgent";
-import { luciaServiceNode } from "./agents/luciaServiceAgent";
-import { llm } from "./config/llm";
+import { AgentState } from "./agents/agentState.js";
+import { dentixServiceNode } from "./agents/dentixServiceAgent.js";
+import { credintegralServiceNode } from "./agents/credintegralServiceAgent.js";
+import { vidaDeudorServiceNode } from "./agents/vidaDeudorAgent.js";
+import { insuranceServiceNode } from "./agents/insuranceServiceAgent.js";
+import { luciaServiceNode } from "./agents/luciaServiceAgent.js";
+import { llm } from "./config/llm.js";
 
 dotenv.config();
 

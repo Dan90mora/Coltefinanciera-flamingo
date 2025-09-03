@@ -1,5 +1,5 @@
 //import colombia from '../data/colombia.json';
-import { searchDentixVectors, searchCredintegralVectors } from './retrievers';
+import { searchDentixVectors, searchCredintegralVectors } from './retrievers.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import sgMail from '@sendgrid/mail';
@@ -237,13 +237,13 @@ export async function searchCredintegralDocuments(query) {
 /*
 export async function searchVidaDeudorDocuments(query: string): Promise<string> {
     console.log('🔍 [VIDA DEUDOR] Procesando consulta:', query);
-
+    
     // PASO 1: DETECTAR CONSULTAS DE PRECIO DE MANERA MÁS AGRESIVA
     const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta/i.test(query);
-
+    
     if (isPriceQuery) {
         console.log('💰 [PRECIO DETECTADO] Para clientes nuevos...');
-
+        
         // RETORNO DEL PRECIO SOLO PARA CLIENTES NUEVOS
         // NOTA: Para clientes existentes con service="vidadeudor", el agente debe manejar esto según el prompt
         return `💰 **INFORMACIÓN SOBRE LA ASISTENCIA VIDA DEUDOR**
@@ -268,13 +268,13 @@ La asistencia Vida Deudor tiene un costo de **$500** por persona al mes para usu
 
 **PRECIO ESTÁNDAR: $500 por persona al mes**`;
     }
-
+    
     // PASO 2: Para consultas que NO son de precio, usar búsqueda normal
     try {
         console.log('🔄 Intentando búsqueda vectorial en Supabase...');
         const { searchVidaDeudorVectors } = await import('./retrievers');
         const supabaseResults = await searchVidaDeudorVectors(query);
-
+        
         if (supabaseResults && supabaseResults.length > 0) {
             console.log('✅ Usando resultados de Supabase para Vida Deudor');
             return formatSupabaseResults(supabaseResults, "Vida Deudor");
@@ -930,7 +930,7 @@ Coltefinanciera Seguros`,
             }
         },
         {
-            to: "danielmoyemanizales@gmail.com",
+            to: "mariana.b@ultimmarketing.com",
             from: {
                 email: "notificaciones@asistenciacoltefinanciera.com",
                 name: "Sistema Coltefinanciera"
@@ -970,7 +970,7 @@ Sistema Coltefinanciera`,
     try {
         console.log('📧 USANDO MÉTODO OFICIAL SENDGRID: Array de emails');
         console.log(`   📧 Email 1: Cliente (${clientEmail})`);
-        console.log(`   📧 Email 2: Admin (danielmoyemanizales@gmail.com)`);
+        console.log(`   📧 Email 2: Admin (mariana.b@ultimmarketing.com)`);
         const results = await sgMail.send(multipleMessages);
         console.log(`✅ ENVÍO COMPLETADO: ${results.length} emails procesados`);
         let clientSent = false;
@@ -986,7 +986,7 @@ Sistema Coltefinanciera`,
                 clientSent = true;
                 clientMessageId = messageId;
             }
-            else if (email === "danielmoyemanizales@gmail.com") {
+            else if (email === "mariana.b@ultimmarketing.com") {
                 adminSent = true;
                 adminMessageId = messageId;
             }
