@@ -369,7 +369,7 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
 ¿Te gustaría que te explique más sobre los servicios incluidos en tu asistencia?`;
         }
         // 🎯 NUEVA LÓGICA SIMPLIFICADA: TODO de la BD = ESPECÍFICO, Sin BD = GENERAL con contactos
-        const { searchVidaDeudorVectors } = await import('../functions/retrievers');
+        const { searchVidaDeudorVectors } = await import('../functions/retrievers.js');
         const vectorResults = await searchVidaDeudorVectors(customerQuery);
         if (vectorResults && vectorResults.length > 0) {
             console.log('✅ [INFORMACIÓN ENCONTRADA] Procesando resultados de asistenciavida_documents'); // ✅ AGREGAR FILTRO DE RELEVANCIA como en otras herramientas

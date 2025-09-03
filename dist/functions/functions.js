@@ -237,13 +237,13 @@ export async function searchCredintegralDocuments(query) {
 /*
 export async function searchVidaDeudorDocuments(query: string): Promise<string> {
     console.log('🔍 [VIDA DEUDOR] Procesando consulta:', query);
-    
+
     // PASO 1: DETECTAR CONSULTAS DE PRECIO DE MANERA MÁS AGRESIVA
     const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta/i.test(query);
-    
+
     if (isPriceQuery) {
         console.log('💰 [PRECIO DETECTADO] Para clientes nuevos...');
-        
+
         // RETORNO DEL PRECIO SOLO PARA CLIENTES NUEVOS
         // NOTA: Para clientes existentes con service="vidadeudor", el agente debe manejar esto según el prompt
         return `💰 **INFORMACIÓN SOBRE LA ASISTENCIA VIDA DEUDOR**
@@ -268,13 +268,13 @@ La asistencia Vida Deudor tiene un costo de **$500** por persona al mes para usu
 
 **PRECIO ESTÁNDAR: $500 por persona al mes**`;
     }
-    
+
     // PASO 2: Para consultas que NO son de precio, usar búsqueda normal
     try {
         console.log('🔄 Intentando búsqueda vectorial en Supabase...');
         const { searchVidaDeudorVectors } = await import('./retrievers');
         const supabaseResults = await searchVidaDeudorVectors(query);
-        
+
         if (supabaseResults && supabaseResults.length > 0) {
             console.log('✅ Usando resultados de Supabase para Vida Deudor');
             return formatSupabaseResults(supabaseResults, "Vida Deudor");
@@ -888,13 +888,13 @@ Coltefinanciera Seguros`,
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px;">
         <h2 style="color: #2c3e50;">¡Tu Asistencia Vida Deudor está Activada!</h2>
-        
+
         <p>Hola <strong>${clientName}</strong>,</p>
-        
+
         <p>¡Excelentes noticias! Tu asistencia Vida Deudor ha sido activada exitosamente.</p>
-        
+
         <p>Como cliente especial de Coltefinanciera, disfrutarás de <strong>3 meses completamente gratis</strong> de cobertura.</p>
-        
+
         <h3 style="color: #27ae60;">Tu asistencia incluye:</h3>
         <ul>
             <li>Teleconsulta medicina general (2 eventos por año)</li>
@@ -902,18 +902,18 @@ Coltefinanciera Seguros`,
             <li>Telepsicología (2 eventos por año)</li>
             <li>Descuentos ilimitados en farmacias</li>
         </ul>
-        
+
         <p style="background-color: #e8f5e8; padding: 15px; border-radius: 5px;">
             <strong>Tu cobertura está activa desde este momento</strong> y no requiere ningún pago adicional durante los primeros 3 meses.
         </p>
-        
+
         <p>Gracias por confiar en Coltefinanciera Seguros.</p>
-        
+
         <p>Saludos,<br>
         <strong>Lucia</strong><br>
         Asesora de Seguros<br>
         Coltefinanciera Seguros</p>
-        
+
         <hr style="margin: 20px 0;">
         <p style="font-size: 12px; color: #666;">
             Este correo fue enviado desde nuestro sistema automatizado de activación de seguros.
@@ -979,7 +979,7 @@ Sistema Coltefinanciera`,
         let adminMessageId = null;
         results.forEach((result, index) => {
             const email = multipleMessages[index].to;
-            const status = result.statusCode;
+            const status = result.statusCode || 'unknown';
             const messageId = result.headers?.['x-message-id'] || null;
             console.log(`   ✅ Email ${index + 1} (${email}): Status ${status}, MessageID: ${messageId}`);
             if (email === clientEmail) {
