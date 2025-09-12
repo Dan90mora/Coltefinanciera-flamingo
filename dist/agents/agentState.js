@@ -12,6 +12,10 @@ export const AgentState = Annotation.Root({
         reducer: (x, y) => y ?? x ?? END,
         default: () => END,
     }),
+    vehicleInsuranceData: Annotation({
+        reducer: (x, y) => y ?? x ?? null,
+        default: () => null,
+    }),
 });
 // Explicación de código:
 // --------------------------------

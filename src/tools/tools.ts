@@ -13,6 +13,7 @@ import {
   registerDentixClient,
   sendPaymentLinkEmail,
   confirmAndUpdateClientData,
+  sendVehicleQuoteEmail,
 } from "../functions/functions.js";
 import { extractPhoneNumber } from "../utils/phoneUtils.js";
 
@@ -789,4 +790,64 @@ export const testVidaDeudorEmailTool = tool(
             clientEmail: z.string().describe("Email del cliente para enviar la prueba"),
         }),
     }
+);
+
+/**
+ * Herramienta para enviar correo de notificación de cotización vehicular
+ * cuando el vehicleServiceAgent capture todos los datos requeridos del cliente y vehículo
+ */
+export const sendVehicleQuoteEmailTool = tool(
+  async ({ 
+    clientName, 
+    clientDocument, 
+    clientBirthDate, 
+    clientPhone, 
+    vehicleBrand, 
+    vehicleModel, 
+    vehicleYear, 
+    vehiclePlate, 
+    vehicleCity 
+  }: {
+    clientName?: string;
+    clientDocument?: string;
+    clientBirthDate: string;
+    clientPhone?: string;
+    vehicleBrand: string;
+    vehicleModel: string;
+    vehicleYear: string;
+    vehiclePlate: string;
+    vehicleCity: string;
+  }) => {
+    console.log(`🚗 Tool: Enviando correo de cotización vehicular - ${vehicleBrand} ${vehicleModel} ${vehicleYear} (${vehiclePlate})`);
+    
+    const result = await sendVehicleQuoteEmail(
+      clientName || 'No proporcionado',
+      clientDocument || 'No proporcionado',
+      clientBirthDate,
+      clientPhone || 'No proporcionado',
+      vehicleBrand,
+      vehicleModel,
+      vehicleYear,
+      vehiclePlate,
+      vehicleCity
+    );
+    
+    console.log(`✅ Tool response: ${result.substring(0, 150)}...`);
+    return result;
+  },
+  {
+    name: "sendVehicleQuoteEmail",
+    description: "Envía un correo electrónico de notificación a danielmoyemanizales@gmail.com cuando se capturan los datos esenciales para una cotización vehicular: fecha de nacimiento, marca, modelo, año, placa y ciudad de circulación. Los datos personales como nombre, cédula y teléfono son opcionales. Úsala cuando tengas al menos estos 6 datos requeridos del vehículo y fecha de nacimiento.",
+    schema: z.object({
+      clientName: z.string().optional().describe("Nombre completo del cliente (opcional)"),
+      clientDocument: z.string().optional().describe("Cédula del cliente (opcional)"),
+      clientBirthDate: z.string().describe("Fecha de nacimiento del cliente (REQUERIDO)"),
+      clientPhone: z.string().optional().describe("Número de teléfono del cliente (opcional)"),
+      vehicleBrand: z.string().describe("Marca del vehículo (ej: Toyota, Chevrolet) - REQUERIDO"),
+      vehicleModel: z.string().describe("Modelo del vehículo (ej: Corolla, Aveo) - REQUERIDO"),
+      vehicleYear: z.string().describe("Año del vehículo - REQUERIDO"),
+      vehiclePlate: z.string().describe("Placa del vehículo - REQUERIDO"),
+      vehicleCity: z.string().describe("Ciudad de circulación del vehículo - REQUERIDO"),
+    }),
+  }
 );

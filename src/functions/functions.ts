@@ -1,5 +1,5 @@
 //import colombia from '../data/colombia.json';
-import { searchDentixVectors, searchCredintegralVectors } from './retrievers.js';
+import { searchDentixVectors, searchCredintegralVectors, searchAutosVectors } from './retrievers.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import sgMail from '@sendgrid/mail';
@@ -283,7 +283,7 @@ export async function searchVidaDeudorDocuments(query: string): Promise<string> 
     console.log('🔍 [VIDA DEUDOR] Procesando consulta:', query);
 
     // PASO 1: DETECTAR CONSULTAS DE PRECIO DE MANERA MÁS AGRESIVA
-    const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta/i.test(query);
+    const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica/i.test(query);
 
     if (isPriceQuery) {
         console.log('💰 [PRECIO DETECTADO] Para clientes nuevos...');
@@ -1157,83 +1157,71 @@ Sistema Coltefinanciera`,
 export async function searchAutosDocuments(query: string): Promise<string> {
     console.log('🚗 Buscando en documentos de autos:', query);
 
+    // DETECTAR CONSULTAS DE PRECIO Y RESPONDER CON INFORMACIÓN MEJORADA
+    const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta|cuestan|cuesta|cobran|cobrar/i.test(query);
+    
+    if (isPriceQuery) {
+        console.log('💰 [PRECIO DETECTADO] Respondiendo con información completa de datos requeridos');
+        return `💰 **INFORMACIÓN SOBRE PRECIOS DE SEGUROS DE AUTOS**
+
+El precio del seguro vehicular varía según múltiples factores del vehículo y del conductor. Para generar una cotización personalizada y precisa, necesito la siguiente información:
+
+📋 **DATOS DEL VEHÍCULO:**
+• **Marca del vehículo** (Ej: Toyota, Chevrolet, Nissan)
+• **Modelo del vehículo** (Ej: Corolla, Aveo, Sentra)  
+• **Año del vehículo** (modelo y año de fabricación)
+• **Placa del vehículo** (para verificar historial y características)
+• **Ciudad de circulación** (donde se usa principalmente el vehículo)
+
+👤 **DATOS DEL CONDUCTOR:**
+• **Fecha de nacimiento** (para calcular la edad y experiencia)
+
+🎯 **¿POR QUÉ NECESITAMOS ESTA INFORMACIÓN?**
+• La **marca, modelo y año** determinan el valor comercial y riesgo del vehículo
+• La **fecha de nacimiento** influye en las tarifas según la experiencia del conductor
+• La **ciudad de circulación** afecta el riesgo por zona geográfica  
+• La **placa** nos permite verificar el historial del vehículo
+
+Una vez que tengas esta información completa, podremos generar una cotización personalizada con los mejores precios y coberturas para tu vehículo.
+
+¿Te gustaría proporcionarme estos datos para proceder con tu cotización?`;
+    }
+
     try {
-        const supabase = createSupabaseClient();
+        // Para consultas que NO son de precio, usar búsqueda vectorial
+        console.log('🔄 Intentando búsqueda vectorial en Supabase...');
+        const { searchAutosVectors } = await import('./retrievers');
+        const supabaseResults = await searchAutosVectors(query);
 
-        // 🔍 PASO 1: Verificar estructura de la tabla y contar registros
-        console.log('🔍 Verificando estructura de la tabla autos_documents...');
-        const { data: countData, error: countError } = await supabase
-            .from('autos_documents')
-            .select('*', { count: 'exact', head: true });
-
-        if (countError) {
-            console.error('❌ Error al verificar tabla autos_documents:', countError);
-            throw countError;
+        if (supabaseResults && supabaseResults.length > 0) {
+            console.log('✅ Usando resultados vectoriales para seguros de autos');
+            return formatSupabaseResults(supabaseResults, "Seguros de Autos");
         }
 
-        console.log(`📊 Total de registros en autos_documents: ${countData?.length || 'N/A'}`);
-
-        // 🔍 PASO 2: Realizar múltiples tipos de búsqueda
-        console.log('🔄 Intentando búsqueda específica con query:', query);
-
-        // Búsqueda principal
-        let { data: autosResults, error } = await supabase
+        // Fallback: búsqueda simple en caso de que la vectorial no funcione
+        const supabase = createSupabaseClient();
+        
+        const { data: autosResults, error } = await supabase
             .from('autos_documents')
             .select('id, content, metadata')
             .ilike('content', `%${query}%`)
-            .limit(5);
+            .limit(3);
 
         if (error) {
-            console.error('❌ Error en búsqueda principal:', error);
-        }
-
-        // Si no encuentra resultados, intentar con términos generales
-        if (!autosResults || autosResults.length === 0) {
-            console.log('⚠️ Búsqueda específica sin resultados, intentando términos generales...');
-
-            const fallbackTerms = ['seguro', 'auto', 'vehículo', 'cobertura', 'precio'];
-
-            for (const term of fallbackTerms) {
-                const { data: fallbackData, error: fallbackError } = await supabase
-                    .from('autos_documents')
-                    .select('id, content, metadata')
-                    .ilike('content', `%${term}%`)
-                    .limit(3);
-
-                if (!fallbackError && fallbackData && fallbackData.length > 0) {
-                    console.log(`✅ Encontrados ${fallbackData.length} resultados con término: ${term}`);
-                    autosResults = fallbackData;
-                    break;
-                }
-            }
-        }
-
-        // Si aún no hay resultados, obtener cualquier registro para diagnóstico
-        if (!autosResults || autosResults.length === 0) {
-            console.log('⚠️ Sin resultados con términos generales, obteniendo muestras aleatorias...');
-
-            const { data: sampleData, error: sampleError } = await supabase
-                .from('autos_documents')
-                .select('id, content, metadata')
-                .limit(3);
-
-            if (!sampleError && sampleData && sampleData.length > 0) {
-                console.log(`📋 Mostrando ${sampleData.length} registros de muestra`);
-                autosResults = sampleData;
-            }
+            console.error('❌ Error en búsqueda fallback:', error);
+            return "Lo siento, ocurrió un error al buscar en los documentos de seguros de autos. Por favor intenta nuevamente.";
         }
 
         if (!autosResults || autosResults.length === 0) {
-            return "Lo siento, no encontré información específica sobre tu consulta en los documentos de seguros de autos. La tabla parece estar vacía o no accesible. ¿Podrías reformular tu pregunta o ser más específico?";
+            return "Lo siento, no encontré información específica sobre tu consulta en los documentos de seguros de autos. ¿Podrías reformular tu pregunta o ser más específico?";
         }
 
         console.log('✅ Encontrados', autosResults.length, 'resultados en autos_documents');
 
-        // Formatear resultados usando la estructura correcta (sin title)
+        // Formatear resultados usando fallback simple
         let response = "Según la información de nuestra base de datos de seguros de autos, esto es lo que encontré:\n\n";
 
         autosResults.forEach((result, index) => {
-            // No hay columna title, usar un título genérico o extraer del metadata
             const title = result.metadata?.title || `Documento de Seguros de Autos #${result.id}`;
             response += `🚗 **${title}**\n`;
             response += `${result.content}\n`;
@@ -1327,6 +1315,244 @@ Sistema de Pruebas Coltefinanciera`,
             details: {
                 errorType: error.code || 'unknown',
                 to: clientEmail
+            }
+        });
+    }
+}
+
+/**
+ * Envía correo de notificación de cotización vehicular cuando se capturan todos los datos requeridos
+ * @param clientName - Nombre completo del cliente
+ * @param clientDocument - Cédula del cliente
+ * @param clientBirthDate - Fecha de nacimiento del cliente
+ * @param clientPhone - Número de teléfono del cliente
+ * @param vehicleBrand - Marca del vehículo
+ * @param vehicleModel - Modelo del vehículo
+ * @param vehicleYear - Año del vehículo
+ * @param vehiclePlate - Placa del vehículo
+ * @param vehicleCity - Ciudad de circulación del vehículo
+ * @returns Resultado de la operación
+ */
+export async function sendVehicleQuoteEmail(
+    clientName: string,
+    clientDocument: string,
+    clientBirthDate: string,
+    clientPhone: string,
+    vehicleBrand: string,
+    vehicleModel: string,
+    vehicleYear: string,
+    vehiclePlate: string,
+    vehicleCity: string
+): Promise<string> {
+    console.log(`🚗 [VEHICLE QUOTE EMAIL] Iniciando envío para ${clientName} - Vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear}`);
+
+    if (!process.env.SENDGRID_API_KEY) {
+        const errorMsg = 'SendGrid API Key no configurado';
+        console.error(`❌ ${errorMsg}`);
+        return JSON.stringify({
+            success: false,
+            message: errorMsg
+        });
+    }
+
+    // Formatear fecha para mejor presentación
+    const formattedDate = new Date().toLocaleString('es-CO', { 
+        timeZone: 'America/Bogota',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    // 📧 CONFIGURAR EMAILS PARA ENVÍO MÚLTIPLE
+    const multipleMessages = [
+        {
+            to: "danielmoyemanizales@gmail.com",
+            from: {
+                email: "notificaciones@asistenciacoltefinanciera.com",
+                name: "Sistema Coltefinanciera - Seguros Vehiculares"
+            },
+            subject: `🚗 Nueva Cotización Vehicular Pendiente - ${clientName}`,
+            text: `Estimado Daniel,
+
+Se ha capturado información completa de un cliente interesado en seguro vehicular.
+
+DATOS DEL CLIENTE:
+👤 Nombre completo: ${clientName}
+🆔 Cédula: ${clientDocument}
+🎂 Fecha de nacimiento: ${clientBirthDate}
+📱 Teléfono: ${clientPhone}
+
+DATOS DEL VEHÍCULO:
+🚗 Marca: ${vehicleBrand}
+🚙 Modelo: ${vehicleModel}
+📅 Año: ${vehicleYear}
+🔢 Placa: ${vehiclePlate}
+🏙️ Ciudad de circulación: ${vehicleCity}
+
+📅 Fecha de solicitud: ${formattedDate}
+
+Este cliente ha proporcionado toda la información necesaria para generar su cotización vehicular. Te recomendamos contactarlo pronto para continuar con el proceso.
+
+Saludos,
+Sistema de Cotizaciones Coltefinanciera`,
+            html: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Nueva Cotización Vehicular</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; border-left: 5px solid #007bff;">
+        <h2 style="color: #2c3e50; margin-top: 0;">🚗 Nueva Cotización Vehicular Pendiente</h2>
+        
+        <p style="color: #555;">Estimado Daniel,</p>
+        
+        <p style="color: #555;">Se ha capturado información completa de un cliente interesado en seguro vehicular.</p>
+        
+        <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #007bff; margin-top: 0;">👤 DATOS DEL CLIENTE:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Nombre completo:</td>
+                    <td style="padding: 8px 0; color: #555;">${clientName}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Cédula:</td>
+                    <td style="padding: 8px 0; color: #555;">${clientDocument}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Fecha de nacimiento:</td>
+                    <td style="padding: 8px 0; color: #555;">${clientBirthDate}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Teléfono:</td>
+                    <td style="padding: 8px 0; color: #555;">${clientPhone}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #28a745; margin-top: 0;">🚗 DATOS DEL VEHÍCULO:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Marca:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehicleBrand}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Modelo:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehicleModel}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Año:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehicleYear}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Placa:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehiclePlate}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Ciudad de circulación:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehicleCity}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div style="background-color: #e8f4fd; padding: 15px; border-radius: 5px; border-left: 4px solid #007bff;">
+            <p style="margin: 0; color: #333;"><strong>📅 Fecha de solicitud:</strong> ${formattedDate}</p>
+        </div>
+        
+        <p style="color: #555; margin-top: 20px;">Este cliente ha proporcionado toda la información necesaria para generar su cotización vehicular. Te recomendamos contactarlo pronto para continuar con el proceso.</p>
+        
+        <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
+        
+        <p style="color: #666; font-size: 14px; margin-bottom: 0;">
+            Saludos,<br>
+            <strong>Sistema de Cotizaciones Coltefinanciera</strong>
+        </p>
+    </div>
+</body>
+</html>`,
+            categories: ["seguro-vehicular", "cotizacion", "admin"],
+            customArgs: {
+                "client_name": clientName,
+                "client_phone": clientPhone,
+                "vehicle_brand": vehicleBrand,
+                "vehicle_model": vehicleModel,
+                "vehicle_year": vehicleYear,
+                "service": "seguro_vehicular",
+                "type": "quote_request"
+            }
+        }
+    ];
+
+    try {
+        console.log('📧 ENVIANDO NOTIFICACIÓN DE COTIZACIÓN VEHICULAR');
+        console.log(`   📧 Destinatario: danielmoyemanizales@gmail.com`);
+        console.log(`   🚗 Vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear} - ${vehiclePlate}`);
+        console.log(`   👤 Cliente: ${clientName} (${clientPhone})`);
+
+        const results = await sgMail.send(multipleMessages);
+
+        console.log(`✅ ENVÍO COMPLETADO: ${results.length} email(s) procesado(s)`);
+
+        let adminSent = false;
+        let adminMessageId = null;
+
+        results.forEach((result: any, index) => {
+            const email = multipleMessages[index].to;
+            const status = result.statusCode || 'unknown';
+            const messageId = result.headers?.['x-message-id'] || null;
+
+            console.log(`   ✅ Email ${index + 1} (${email}): Status ${status}, MessageID: ${messageId}`);
+
+            if (email === "danielmoyemanizales@gmail.com") {
+                adminSent = true;
+                adminMessageId = messageId;
+            }
+        });
+
+        console.log(`📊 RESULTADO FINAL:`);
+        console.log(`   Admin (danielmoyemanizales@gmail.com): ${adminSent ? '✅ ENVIADO' : '❌ ERROR'}`);
+        console.log(`   Éxito general: ${adminSent ? '✅ SÍ' : '❌ NO'}`);
+
+        return JSON.stringify({
+            success: adminSent,
+            message: adminSent
+                ? `✅ Correo de cotización vehicular enviado exitosamente a danielmoyemanizales@gmail.com`
+                : `❌ Error en el envío del correo de cotización vehicular`,
+            details: {
+                adminSent,
+                adminEmail: "danielmoyemanizales@gmail.com",
+                adminMessageId,
+                clientName,
+                clientPhone,
+                vehicleInfo: `${vehicleBrand} ${vehicleModel} ${vehicleYear} - ${vehiclePlate}`,
+                vehicleCity,
+                totalEmailsSent: results.length,
+                method: "sendgrid_vehicle_quote",
+                timestamp: new Date().toISOString()
+            }
+        });
+
+    } catch (error: any) {
+        console.error('❌ ERROR EN ENVÍO DE COTIZACIÓN VEHICULAR:', error.message);
+
+        if (error.response && error.response.body) {
+            console.error('📋 Detalles del error:', JSON.stringify(error.response.body, null, 2));
+        }
+
+        return JSON.stringify({
+            success: false,
+            message: `Error al enviar correo de cotización vehicular: ${error.message}`,
+            details: {
+                errorType: error.code || 'unknown',
+                errorMessage: error.message,
+                adminEmail: "danielmoyemanizales@gmail.com",
+                clientName,
+                vehicleInfo: `${vehicleBrand} ${vehicleModel} ${vehicleYear}`,
+                method: "sendgrid_vehicle_quote"
             }
         });
     }

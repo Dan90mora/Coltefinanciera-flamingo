@@ -1,6 +1,19 @@
 import { END, Annotation } from "@langchain/langgraph";
 import { BaseMessage } from "@langchain/core/messages";
 
+// Tipo para datos de seguro vehicular
+export interface VehicleInsuranceData {
+  fullName: string | null;
+  cedula: string | null;
+  birthDate: string | null;
+  phone: string | null;
+  vehicleBrand: string | null;
+  vehicleModel: string | null;
+  vehicleYear: string | null;
+  vehiclePlate: string | null;
+  vehicleCity: string | null;
+}
+
 export const AgentState = Annotation.Root({
     messages: Annotation<BaseMessage[]>({
       reducer: (x, y) => x.concat(y),
@@ -13,6 +26,10 @@ export const AgentState = Annotation.Root({
     next: Annotation<string>({
       reducer: (x, y) => y ?? x ?? END,
       default: () => END,
+    }),
+    vehicleInsuranceData: Annotation<VehicleInsuranceData | null>({
+      reducer: (x, y) => y ?? x ?? null,
+      default: () => null,
     }),
 });
 

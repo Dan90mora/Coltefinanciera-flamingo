@@ -457,3 +457,122 @@ export const searchBienestarVectors = async (query) => {
         throw e;
     }
 };
+/**
+ * Busca en la base vectorial de Autos usando embeddings de OpenAI
+ * @param query - La consulta del usuario
+ * @returns Array de resultados de la búsqueda vectorial
+ */
+export const searchAutosVectors = async (query) => {
+    const embeddings = createEmbeddings();
+    const supabase = createSupabaseClient();
+    console.log(`[DEBUG] Iniciando búsqueda en seguros de autos con la consulta: "${query}"`);
+    try {
+        // Generar embedding para la consulta
+        const queryEmbedding = await embeddings.embedQuery(query);
+        console.log("[DEBUG] Embedding generado para la consulta.");
+        // Detectar si la consulta es sobre cobertura o precios y optimizar la búsqueda
+        const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara/i.test(query);
+        const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización/i.test(query);
+        // Estrategia de búsqueda: empezar con la consulta original, luego simplificar
+        let searchQueries = [query];
+        // Siempre agregar versiones simplificadas como fallback
+        searchQueries.push("seguro autos");
+        searchQueries.push("seguro vehicular");
+        searchQueries.push("protección vehicular");
+        if (isCoverageQuery) {
+            // Agregar variaciones de búsqueda para consultas sobre cobertura
+            searchQueries.push("cobertura");
+            searchQueries.push("servicios incluidos");
+            searchQueries.push("beneficios seguro");
+            searchQueries.push("qué cubre");
+            searchQueries.push("todo riesgo");
+            searchQueries.push("responsabilidad civil");
+        }
+        else if (isPriceQuery) {
+            // Agregar variaciones de búsqueda para consultas sobre precio
+            searchQueries.push("propuesta económica");
+            searchQueries.push("precio del seguro");
+            searchQueries.push("costo del seguro");
+            searchQueries.push("valor del seguro");
+            searchQueries.push("cuánto cuesta");
+            searchQueries.push("tarifa");
+            searchQueries.push("cotización");
+            searchQueries.push("marca modelo año");
+            searchQueries.push("información del vehículo");
+        }
+        else {
+            // Para consultas generales, agregar términos relacionados
+            searchQueries.push("información");
+            searchQueries.push("seguro");
+            searchQueries.push("cobertura");
+            searchQueries.push("beneficios");
+        }
+        // Acumular todos los chunks relevantes de todas las queries
+        const allChunks = [];
+        const seenIds = new Set();
+        for (const searchQuery of searchQueries) {
+            const searchEmbedding = searchQuery === query ? queryEmbedding : await embeddings.embedQuery(searchQuery);
+            // Intentar primero con función RPC híbrida si existe
+            try {
+                const { data, error } = await supabase.rpc('search_autos_documents_hybrid', {
+                    query_embedding: searchEmbedding,
+                    query_text: searchQuery,
+                    match_threshold: 0.1,
+                    match_count: 5,
+                    rrf_k: 60
+                });
+                if (!error && data && data.length > 0) {
+                    console.log(`[DEBUG] ✅ Llamada RPC híbrida exitosa para query: "${searchQuery}"`);
+                    data.forEach((chunk) => {
+                        if (!seenIds.has(chunk.id)) {
+                            allChunks.push(chunk);
+                            seenIds.add(chunk.id);
+                        }
+                    });
+                    continue;
+                }
+            }
+            catch (rpcError) {
+                console.log(`[DEBUG] RPC híbrida no disponible, usando búsqueda simple`);
+            }
+            // Fallback: búsqueda simple con similarity
+            const { data, error } = await supabase
+                .from('autos_documents')
+                .select('*')
+                .textSearch('content', searchQuery)
+                .limit(3);
+            if (error) {
+                console.error('[DEBUG] ❌ Error en búsqueda simple:', error);
+                continue;
+            }
+            if (data && data.length > 0) {
+                console.log(`[DEBUG] ✅ Búsqueda simple exitosa para query: "${searchQuery}"`);
+                data.forEach((chunk) => {
+                    if (!seenIds.has(chunk.id)) {
+                        allChunks.push(chunk);
+                        seenIds.add(chunk.id);
+                    }
+                });
+            }
+        }
+        // Si es consulta de precio, priorizar chunks que contengan información sobre datos requeridos
+        if (isPriceQuery && allChunks.length > 0) {
+            const priceChunk = allChunks.find(chunk => /marca.*modelo.*año|modelo.*año.*marca|información.*vehículo|datos.*vehículo|cotización/i.test(chunk.content));
+            if (priceChunk) {
+                console.log(`[DEBUG] Chunk de precio específico detectado (ID: ${priceChunk.id})`);
+                return [priceChunk];
+            }
+        }
+        if (allChunks.length > 0) {
+            return allChunks.slice(0, 3);
+        }
+        // Si no encontramos nada con ninguna consulta
+        console.log('[DEBUG] ⚠️ La búsqueda no arrojó resultados desde Supabase.');
+        return [];
+    }
+    catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error(`[DEBUG] ❌ Excepción capturada en searchAutosVectors: ${errorMessage}`);
+        throw e;
+    }
+};

@@ -6,7 +6,7 @@ import { SystemMessage } from "@langchain/core/messages";
 import { AgentState } from "./agentState.js";
 import { llm } from "../config/llm.js";
 import { MESSAGES } from '../config/constants.js';
-import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool } from "../tools/tools.js";
+import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, consultAutosSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool, sendVehicleQuoteEmailTool } from "../tools/tools.js";
 import { END } from "@langchain/langgraph";
 
 dotenv.config();
@@ -18,7 +18,7 @@ const luciaServiceAgent = createReactAgent({
         consultCredintegralSpecialistTool,
         consultVidaDeudorSpecialistTool,
         consultBienestarSpecialistTool, // <-- Nueva herramienta para Bienestar Plus
-        //consultAutosSpecialistTool, // <-- Nueva herramienta para seguros de autos
+        consultAutosSpecialistTool, // <-- Nueva herramienta para seguros de autos
         //consultInsuranceSpecialistTool,
         searchDentixClientTool,
         extractPhoneNumberTool,
@@ -27,7 +27,8 @@ const luciaServiceAgent = createReactAgent({
         confirmAndUpdateClientDataTool, // <-- Nueva herramienta para confirmar/actualizar datos
         sendVidaDeudorActivationEmailTool, // <-- Nueva herramienta para activación de vida deudor
         showVidaDeudorClientDataTool, // <-- Nueva herramienta para mostrar datos de vida deudor
-        updateVidaDeudorClientDataTool // <-- Nueva herramienta para actualizar datos de vida deudor
+        updateVidaDeudorClientDataTool, // <-- Nueva herramienta para actualizar datos de vida deudor
+        sendVehicleQuoteEmailTool // <-- Nueva herramienta para enviar cotización de seguros de autos
     ],
     stateModifier: new SystemMessage(MESSAGES.SYSTEM_LUCIA_SUPERVISOR_PROMPT)
 })
@@ -49,7 +50,28 @@ export const luciaServiceNode = async (
           const clientInfo = JSON.parse(clientInfoString);
           
           let greeting;
-          if (clientInfo.service === 'vidadeudor') {
+          if (clientInfo.service === 'autos') {
+            // Cliente existente con seguros de autos: activar modo especialista en autos
+            greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE ÚNICAMENTE: Hola ${clientInfo.name}, veo que estás interesado en todo lo que tiene que ver con seguros de autos y estoy aquí para ayudarte con todas las dudas que tengas.
+
+DATOS DEL CLIENTE (SOLO PARA PRIMERA INTERACCIÓN):
+- Nombre: ${clientInfo.name}
+- Teléfono: ${phoneNumber}
+- Servicio: ${clientInfo.service}
+- Producto: ${clientInfo.product || 'No especificado'}
+
+INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
+
+1. **SALUDO PERSONALIZADO:** Salúdalo por su nombre de manera cálida (SOLO EN ESTE PRIMER MENSAJE)
+2. **ESPECIALISTA EN AUTOS:** Identifícate como especialista en seguros de autos de Coltefinanciera
+3. **ATENCIÓN PERSONALIZADA:** Menciona que ves su interés en seguros de autos y estás aquí para ayudarle con todas sus dudas sobre seguros vehiculares
+4. **ACTIVACIÓN AUTOMÁTICA:** Para CUALQUIER consulta relacionada con seguros de autos, usa INMEDIATAMENTE la herramienta 'consult_autos_specialist' con la consulta del cliente
+5. **PERSISTENCIA:** Sé muy insistente pero amable para convencer al cliente sobre los beneficios de los seguros de autos
+
+IMPORTANTE: En mensajes posteriores de esta misma conversación, NO repitas su nombre constantemente. Manténte natural y directo como especialista en seguros vehiculares.
+
+TONO: Personalizado y especializado en el primer mensaje, experto y convincente en mensajes siguientes.`;
+          } else if (clientInfo.service === 'vidadeudor') {
             // Cliente existente con vida deudor: informar sobre beneficio especial
             const productInfo = clientInfo.product ? `por haber adquirido tu ${clientInfo.product}` : 'por ser cliente y tener un servicio/crédito';
             

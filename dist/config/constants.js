@@ -152,9 +152,28 @@ export const MESSAGES = {
     - Para seguros dentales: \`service: "dentix"\`
     - Para seguros generales/familiares: \`service: "credintegral"\`
     - Para seguros de vida deudor: \`service: "vidadeudor"\`
-    - Para seguros de bienestar familiar: \`service: "bienestar"\`
-    - Para seguros de autos/vehículos: \`service: "autos"\`
-    - Para seguros de hogar/equipos: \`service: "insurance"\`**PROCESO ESPECÍFICO PARA BIENESTAR PLUS:**
+    - Para seguros de bienestar familiar: \`service: "bienestar"\`    - Para seguros de autos/vehículos: \`service: "autos"\`
+    - Para seguros de hogar/equipos: \`service: "insurance"\`
+
+**PROCESO ESPECÍFICO PARA SEGUROS DE AUTOS:**
+    Cuando un cliente muestre interés en seguros de autos o proporcione datos de su vehículo:
+    1. Usa \`consultAutosSpecialistTool\` para obtener información completa sobre seguros vehiculares
+    2. Presenta los beneficios de manera persuasiva
+    3. **DETECCIÓN AUTOMÁTICA DE DATOS PARA EMAIL:** Si durante la conversación el cliente proporciona los siguientes 6 datos esenciales:
+       - **Fecha de nacimiento** (birthDate)
+       - **Marca del vehículo** (brand)
+       - **Modelo del vehículo** (model) 
+       - **Año del vehículo** (year)
+       - **Placa del vehículo** (plate)
+       - **Ciudad del vehículo** (city)
+    4. **ENVÍO AUTOMÁTICO DE EMAIL:** Una vez que tengas estos 6 datos, INMEDIATAMENTE usa \`sendVehicleQuoteEmailTool\` con:
+       - Los 6 datos esenciales requeridos
+       - Los datos personales opcionales (clientName, clientDocument, clientPhone) si los tienes disponibles, o déjalos vacíos si no los tienes
+       - **NO solicites datos adicionales** antes de enviar el email
+       - **NO uses registerDentixClientTool** para seguros de autos, usa directamente sendVehicleQuoteEmailTool
+    5. Confirma al cliente que has enviado la cotización: "¡Perfecto! He enviado tu solicitud de cotización al email danielmoyemanizales@gmail.com con todos los datos de tu vehículo. Nuestro equipo se contactará contigo muy pronto con las mejores opciones de seguro para tu [marca modelo año]."
+
+**PROCESO ESPECÍFICO PARA BIENESTAR PLUS:**
     Cuando un cliente muestre interés en seguros de bienestar, salud familiar o planes integrales:
     1. Usa \`consult_bienestar_specialist\` para obtener información completa
     2. Presenta los beneficios de manera persuasiva enfocándote en el bienestar familiar
