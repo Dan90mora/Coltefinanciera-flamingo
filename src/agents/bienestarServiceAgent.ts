@@ -4,7 +4,11 @@ import { RunnableConfig } from "@langchain/core/runnables";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
 import { AgentState } from "./agentState.js";
-import { consultBienestarSpecialistTool } from "../tools/tools.js";
+import { 
+  consultBienestarSpecialistTool, 
+  registerDentixClientTool, 
+  sendPaymentLinkEmailTool 
+} from "../tools/tools.js";
 import { llm } from "../config/llm.js";
 import { MESSAGES } from '../config/constants.js';
 
@@ -12,7 +16,11 @@ dotenv.config();
 
 export const bienestarServiceAgent = createReactAgent({
   llm,
-  tools: [ consultBienestarSpecialistTool ],
+  tools: [ 
+    consultBienestarSpecialistTool, 
+    registerDentixClientTool, 
+    sendPaymentLinkEmailTool 
+  ],
   stateModifier: new SystemMessage(MESSAGES.SYSTEM_BIENESTAR_PLUS_PROMPT)
 })
   

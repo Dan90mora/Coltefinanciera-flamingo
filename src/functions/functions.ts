@@ -1,6 +1,7 @@
 //import colombia from '../data/colombia.json';
 import { searchDentixVectors, searchCredintegralVectors, searchAutosVectors } from './retrievers.js';
 import { createClient } from '@supabase/supabase-js';
+import { getPaymentLink } from '../config/constants.js';
 import dotenv from 'dotenv';
 import sgMail from '@sendgrid/mail';
 
@@ -347,7 +348,7 @@ const createSupabaseClient = () => createClient(
  * @param phoneNumber - El número telefónico del cliente
  * @returns Información del cliente si existe, null si no se encuentra
  */
-export async function searchDentixClientByPhone(phoneNumber: string): Promise<{ name: string; email: string; phone_number: string; service?: string; product?: string; } | null> {
+export async function searchDentixClientByPhone(phoneNumber: string): Promise<{ name: string; email: string; phone_number: string; service?: string; product?: string; document_id?: string; } | null> {
     console.log(`🔍 Buscando cliente en Supabase con número: ${phoneNumber}`);
 
     const supabaseUrl = process.env.SUPABASE_URL;
@@ -381,12 +382,11 @@ export async function searchDentixClientByPhone(phoneNumber: string): Promise<{ 
     }
 
     const variationsToSearch = Array.from(searchVariations);
-    console.log(`🔍 Búsquedas para el número "${phoneNumber}":`, variationsToSearch);
-
-    try {        // 3. Buscar en la base de datos con todas las variaciones
+    console.log(`🔍 Búsquedas para el número "${phoneNumber}":`, variationsToSearch);    try {
+        // 3. Buscar en la base de datos con todas las variaciones
         const { data, error } = await supabase
             .from('dentix_clients')
-            .select('name, email, phone_number, service, product')
+            .select('name, email, phone_number, service, product, document_id')
             .in('phone_number', variationsToSearch)
             .maybeSingle(); // .maybeSingle() para que no dé error si encuentra 0 o 1
 
@@ -435,6 +435,12 @@ export async function registerDentixClient({ name, email, phone_number, service 
 export async function sendPaymentLinkEmail(clientName: string, clientEmail: string, insuranceName: string): Promise<string> {
     console.log(`📧 Intentando enviar correo de pago a ${clientName} (${clientEmail}) por el seguro ${insuranceName}`);
 
+    // Obtener el enlace de pago específico para el tipo de seguro
+    const paymentLink = getPaymentLink(insuranceName);
+    console.log(`🔗 DEBUG: Nombre del seguro recibido: "${insuranceName}"`);
+    console.log(`🔗 DEBUG: Nombre normalizado: "${insuranceName.toLowerCase().trim()}"`);
+    console.log(`🔗 DEBUG: Enlace generado: ${paymentLink}`);
+    
     const emailContent = `
         Hola ${clientName},
 
@@ -442,7 +448,7 @@ export async function sendPaymentLinkEmail(clientName: string, clientEmail: stri
 
         Estás a un solo clic de finalizar la adquisición de tu seguro. Por favor, utiliza el siguiente enlace para completar el pago de forma segura.
 
-        Enlace de pago: https://pagos.coltefinanciera.com/12345?cliente=${encodeURIComponent(clientEmail)}
+        Enlace de pago: ${paymentLink}?cliente=${encodeURIComponent(clientEmail)}
 
         Gracias por confiar en Coltefinanciera Seguros.
 
@@ -468,7 +474,7 @@ export async function sendPaymentLinkEmail(clientName: string, clientEmail: stri
 
     try {
         await sgMail.send(msg);
-        console.log(`✅ Correo enviado exitosamente a ${clientEmail}`);
+        console.log(`✅ Correo enviado exitosamente a ${clientEmail} con enlace: ${paymentLink}`);
         return JSON.stringify({
             success: true,
             message: `Correo con enlace de pago enviado exitosamente a ${clientEmail}.`
@@ -1555,5 +1561,136 @@ Sistema de Cotizaciones Coltefinanciera`,
                 method: "sendgrid_vehicle_quote"
             }
         });
+    }
+}
+
+/**
+ * Busca información específica en los documentos de SOAT almacenados en Supabase
+ * @param query - La consulta del usuario para buscar en los documentos de SOAT
+ * @returns Resultados de la búsqueda o mensaje de error
+ */
+export async function searchSoatDocuments(query: string): Promise<string> {    console.log(`🛡️ [SOAT] Procesando consulta: "${query}"`);
+
+    // PASO 1: DETECTAR CONSULTAS DE PRECIO (EXCLUYENDO MULTAS/SANCIONES)
+    const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|cuánto.*cuesta|cuanto.*vale/i.test(query);
+    const isFineQuery = /multa|sanción|sancion|deuda|infracción|infraccion|penalidad|castigo|comparendo|contravencion|contravención/i.test(query);
+    
+    // Solo activar respuesta de precio si es consulta de precio Y NO es sobre multas/sanciones
+    if (isPriceQuery && !isFineQuery) {
+        console.log('💰 [PRECIO DETECTADO] Respondiendo con información completa de datos requeridos para cotización SOAT');
+        return `💰 **INFORMACIÓN SOBRE PRECIOS DEL SOAT**
+
+El precio del SOAT (Seguro Obligatorio de Accidentes de Tránsito) varía según el tipo de vehículo y su uso. Para generar una cotización personalizada y precisa, necesito la siguiente información:
+
+📋 **DATOS DEL VEHÍCULO:**
+• **Tipo de vehículo** (Automóvil, motocicleta, camioneta, etc.)
+• **Cilindraje del motor** (para motos y algunos vehículos)
+• **Año del vehículo** (modelo y año de fabricación)
+• **Placa del vehículo** (para verificar historial)
+• **Uso del vehículo** (particular, público, carga, etc.)
+
+👤 **DATOS DEL PROPIETARIO:**
+• **Cédula del propietario** (para verificar datos)
+• **Ciudad de circulación** (donde se usa principalmente)
+
+🎯 **¿POR QUÉ NECESITAMOS ESTA INFORMACIÓN?**
+• El **tipo y cilindraje** determinan la categoría tarifaria
+• El **año** afecta el valor comercial y riesgo
+• El **uso** (particular vs comercial) modifica las tarifas
+• La **ciudad** influye en los factores de riesgo regional
+
+Una vez que tengas esta información completa, podremos generar una cotización personalizada del SOAT con los mejores precios disponibles.
+
+¿Te gustaría proporcionarme estos datos para proceder con tu cotización SOAT?`;
+    }    // PASO 2: Si es consulta sobre multas/sanciones, buscar en base de datos
+    if (isFineQuery) {
+        console.log('⚖️ [MULTA/SANCIÓN DETECTADA] Buscando información real en base de datos de SOAT');
+        
+        try {
+            // Para consultas de multas, buscar específicamente "Consecuencias de no tener SOAT vigente"
+            console.log('🔍 Buscando información específica sobre consecuencias...');
+            const supabase = createSupabaseClient();
+            
+            const { data: consecuenciasResults, error } = await supabase
+                .from('soat_documents')
+                .select('id, content, metadata')
+                .or('content.ilike.%Consecuencias de no tener SOAT%,content.ilike.%consecuencias%,content.ilike.%multa%,content.ilike.%sanción%,content.ilike.%penalidad%')
+                .limit(3);
+
+            if (error) {
+                console.error('❌ Error buscando consecuencias:', error);
+                return "Lo siento, ocurrió un error al buscar información sobre las consecuencias de no tener SOAT. Por favor intenta nuevamente.";
+            }
+
+            if (consecuenciasResults && consecuenciasResults.length > 0) {
+                console.log('✅ Encontrada información sobre consecuencias y multas');
+                
+                let response = "Según la información oficial de SOAT, esto es lo que encontré sobre las consecuencias:\n\n";
+                
+                consecuenciasResults.forEach((result, index) => {
+                    response += `📋 **Información Oficial ${index + 1}:**\n`;
+                    response += `${result.content}\n\n`;
+                    
+                    if (index < consecuenciasResults.length - 1) {
+                        response += "---\n\n";
+                    }
+                });
+
+                return response;
+            }
+            
+            return "Lo siento, no encontré información específica sobre las consecuencias o multas en los documentos de SOAT. ¿Podrías reformular tu pregunta?";
+            
+        } catch (error) {
+            console.error('❌ Error al buscar consecuencias:', error);
+            return "Lo siento, ocurrió un error al buscar información sobre las consecuencias. Por favor intenta nuevamente.";
+        }
+    }
+
+    try {
+        // Para consultas que NO son de precio de cotización, usar búsqueda vectorial
+        console.log('🔄 Intentando búsqueda vectorial en Supabase para SOAT...');
+        const { searchSoatVectors } = await import('./retrievers');
+        const supabaseResults = await searchSoatVectors(query);
+
+        if (supabaseResults && supabaseResults.length > 0) {
+            console.log('✅ Usando resultados vectoriales para SOAT');
+            return formatSupabaseResults(supabaseResults, "SOAT");
+        }
+
+        // Fallback: búsqueda simple en caso de que la vectorial no funcione
+        const supabase = createSupabaseClient();
+        
+        const { data: soatResults, error } = await supabase
+            .from('soat_documents')
+            .select('id, content, metadata')
+            .ilike('content', `%${query}%`)
+            .limit(3);
+
+        if (error) {
+            console.error('❌ Error en búsqueda fallback SOAT:', error);
+            return "Lo siento, ocurrió un error al buscar en los documentos de SOAT. Por favor intenta nuevamente.";
+        }
+
+        if (!soatResults || soatResults.length === 0) {
+            return "Lo siento, no encontré información específica sobre tu consulta en los documentos de SOAT. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro obligatorio de accidentes de tránsito?";
+        }
+
+        console.log('✅ Encontrados', soatResults.length, 'resultados en soat_documents');
+
+        // Formatear resultados usando fallback simple
+        let response = "Según la información de nuestra base de datos de SOAT, esto es lo que encontré:\n\n";
+        
+        soatResults.forEach((result, index) => {
+            response += `📄 **Información ${index + 1}:**\n`;
+            response += `${result.content.substring(0, 400)}...\n\n`;
+        });
+
+        return response;
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Error al buscar en Supabase para SOAT:', errorMessage);
+        return "Lo siento, ocurrió un error al buscar en los documentos de SOAT. Por favor intenta nuevamente.";
     }
 }
