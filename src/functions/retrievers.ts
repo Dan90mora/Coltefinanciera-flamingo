@@ -655,3 +655,135 @@ export const searchAutosVectors = async (query: string): Promise<any[]> => {
         throw e;
     }
 };
+
+/**
+ * Realiza búsqueda vectorial semántica en los documentos de SOAT
+ * @param query - La consulta del usuario
+ * @returns Array de resultados de la búsqueda vectorial
+ */
+export const searchSoatVectors = async (query: string): Promise<any[]> => {
+    const supabase = createSupabaseClient();
+    const embeddings = createEmbeddings();
+    console.log(`[DEBUG] Iniciando búsqueda vectorial en soat_documents: "${query}"`);
+
+    try {
+        // Generar embedding de la consulta usando LangChain
+        const embedding = await embeddings.embedQuery(query);
+        console.log(`[DEBUG] Embedding generado exitosamente para: "${query}"`);
+
+        // Realizar búsqueda vectorial en la tabla soat_documents
+        const { data: vectorResults, error: vectorError } = await supabase.rpc(
+            'match_soat_documents', // Función RPC que debe existir en Supabase
+            {
+                query_embedding: embedding,
+                match_threshold: 0.3, // Umbral de similitud más bajo para SOAT
+                match_count: 5
+            }
+        );
+
+        if (vectorError) {
+            console.error('[DEBUG] ❌ Error en búsqueda vectorial RPC soat_documents:', vectorError);
+            // Fallback a búsqueda de texto simple
+            return await fallbackTextSearchSoat(query);
+        }
+
+        if (!vectorResults || vectorResults.length === 0) {
+            console.log('[DEBUG] ⚠️ No se encontraron resultados vectoriales en soat_documents');
+            return await fallbackTextSearchSoat(query);
+        }
+
+        console.log(`[DEBUG] ✅ Encontrados ${vectorResults.length} resultados vectoriales en soat_documents`);
+        return vectorResults;
+
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error(`[DEBUG] ❌ Excepción en searchSoatVectors: ${errorMessage}`);
+        return await fallbackTextSearchSoat(query);
+    }
+};
+
+/**
+ * Búsqueda de texto simple como fallback para SOAT
+ * @param query - La consulta del usuario
+ * @returns Array de resultados de búsqueda simple
+ */
+async function fallbackTextSearchSoat(query: string): Promise<any[]> {
+    const supabase = createSupabaseClient();
+    console.log(`[DEBUG] Usando fallback de texto simple para SOAT: "${query}"`);
+
+    try {
+        // Lista de términos relacionados para buscar información sobre consecuencias/multas
+        const searchTerms = [];
+        
+        // Si la consulta es sobre multas/sanciones, buscar términos relacionados
+        const isFineQuery = /multa|sanción|sancion|deuda|infracción|infraccion|penalidad|castigo|comparendo|contravencion|contravención/i.test(query);
+        
+        if (isFineQuery) {
+            // Para consultas de multas, buscar términos específicos
+            searchTerms.push(
+                'consecuencias',
+                'Consecuencias de no tener SOAT',
+                'Consecuencias de no tener SOAT vigente',
+                'multa',
+                'sanción',
+                'penalidad',
+                'obligatorio',
+                'circular sin SOAT'
+            );
+        } else {
+            // Para otras consultas, usar la consulta original
+            searchTerms.push(query);
+        }
+
+        console.log(`[DEBUG] Buscando con términos: ${searchTerms.join(', ')}`);
+
+        // Buscar con cada término y combinar resultados
+        const allResults = [];
+        const seenIds = new Set();
+
+        for (const term of searchTerms) {
+            const { data: textResults, error: textError } = await supabase
+                .from('soat_documents')
+                .select('id, content, metadata')
+                .ilike('content', `%${term}%`)
+                .limit(5);
+
+            if (textError) {
+                console.error(`[DEBUG] ❌ Error en búsqueda de texto simple para "${term}":`, textError);
+                continue;
+            }
+
+            if (textResults && textResults.length > 0) {
+                console.log(`[DEBUG] ✅ Encontrados ${textResults.length} resultados para "${term}"`);
+                
+                // Agregar resultados únicos
+                for (const result of textResults) {
+                    if (!seenIds.has(result.id)) {
+                        allResults.push(result);
+                        seenIds.add(result.id);
+                    }
+                }
+            }
+        }
+
+        if (allResults.length === 0) {
+            console.log('[DEBUG] ⚠️ No se encontraron resultados con búsqueda de texto simple en soat_documents');
+            return [];
+        }
+
+        console.log(`[DEBUG] ✅ Encontrados ${allResults.length} resultados con búsqueda de texto simple en soat_documents`);
+        
+        // Formatear los resultados para que sean compatibles con el formato vectorial
+        return allResults.map(result => ({
+            id: result.id,
+            content: result.content,
+            metadata: result.metadata,
+            similarity: 0.5 // Asignar una similitud media para resultados de texto simple
+        }));
+
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error(`[DEBUG] ❌ Error en fallbackTextSearchSoat: ${errorMessage}`);
+        return [];
+    }
+}

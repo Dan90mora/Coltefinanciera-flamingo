@@ -105,8 +105,7 @@ export const extractPhoneNumberTool = tool(
 export const searchDentixClientTool = tool(
     async ({ phoneNumber }: { phoneNumber: string }) => {
       console.log(`🔍 Tool: Buscando cliente con número: ${phoneNumber}`);
-      
-      const clientInfo = await searchDentixClientByPhone(phoneNumber);
+        const clientInfo = await searchDentixClientByPhone(phoneNumber);
         // Formatear la respuesta para el LLM de manera clara
       if (clientInfo && clientInfo.name) {
         // Cliente encontrado, devolver un objeto estructurado
@@ -116,7 +115,8 @@ export const searchDentixClientTool = tool(
             email: clientInfo.email,
             phoneNumber: clientInfo.phone_number,
             service: clientInfo.service,
-            product: clientInfo.product
+            product: clientInfo.product,
+            document_id: clientInfo.document_id || null // ✅ AGREGAR CÉDULA
         };
         console.log(`✅ Tool response: Cliente encontrado`, result);
         return JSON.stringify(result);
@@ -771,6 +771,34 @@ export const searchAutosDocumentsTool = tool(
       description: "Busca información específica en los documentos de seguros de autos almacenados en Supabase. Úsala cuando necesites información sobre coberturas, precios, beneficios, procedimientos o cualquier detalle específico de los seguros vehiculares.",
       schema: z.object({
         query: z.string().describe("La consulta específica del usuario para buscar en los documentos de seguros de autos"),
+      }),
+    }
+);
+
+export const consultSoatSpecialistTool = tool(
+    async ({ customerQuery }: { customerQuery: string }) => {
+      console.log(`🛡️ Lucia consulta al especialista SOAT (tabla soat_documents): ${customerQuery}`);
+
+      try {
+        const { searchSoatDocuments } = await import('../functions/functions.js');
+        const searchResults = await searchSoatDocuments(customerQuery);
+
+        if (!searchResults || searchResults.includes("Lo siento, no encontré")) {
+          return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de SOAT. Mi especialidad son los seguros SOAT, coberturas obligatorias, beneficios y procedimientos. ¿Podrías preguntarme algo relacionado con el seguro obligatorio de accidentes de tránsito (SOAT)?';
+        }
+
+        console.log(`✅ Respuesta del especialista SOAT: ${searchResults.substring(0, 100)}...`);
+        return searchResults;
+      } catch (error) {
+        console.error('❌ Error consultando base de datos de SOAT:', error);
+        return 'Lo siento, no pude acceder a la base de datos de SOAT en este momento. Por favor intenta nuevamente o contacta a nuestro servicio al cliente.';
+      }
+    },
+    {
+      name: "consult_soat_specialist",
+      description: "Consulta al especialista en seguros SOAT usando la tabla soat_documents de Supabase. Obtiene información específica sobre el seguro obligatorio de accidentes de tránsito, coberturas, beneficios y procedimientos. Úsala cuando el cliente pregunte sobre SOAT, seguro obligatorio, accidentes de tránsito o coberturas obligatorias.",
+      schema: z.object({
+        customerQuery: z.string().describe("La consulta específica del cliente sobre SOAT que necesita respuesta especializada"),
       }),
     }
 );

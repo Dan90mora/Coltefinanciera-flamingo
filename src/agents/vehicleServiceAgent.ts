@@ -7,6 +7,7 @@ import { AgentState, VehicleInsuranceData } from "./agentState";
 import { searchAutosDocumentsTool, sendVehicleQuoteEmailTool } from "../tools/tools";
 import { llm } from "../config/llm";
 import { MESSAGES } from '../config/constants';
+import { searchDentixClientByPhone } from "../functions/functions";
 
 dotenv.config();
 
@@ -50,17 +51,33 @@ export const vehicleServiceNode = async (
         extractedData.cedula = cedulaMatch[1];
       }
       
-      // Extraer teléfono (números de 10 dígitos)
+      // Extraer teléfono (números de 10 dígitos o con +57)
       const phonePatterns = [
-        /(?:teléfono|telefono|celular|número|movil).*?(\d{10})/i,
-        /(?:mi número es|mi cel es|mi teléfono es)\s*(\d{10})/i
+        /(?:teléfono|telefono|celular|número|movil).*?(\+?57)?(\d{10})/i,
+        /(?:mi número es|mi cel es|mi teléfono es)\s*(\+?57)?(\d{10})/i,
+        /(\+57\d{10})/i, // Formato +57XXXXXXXXXX
+        /(\d{10})/i // Solo 10 dígitos
       ];
       
       for (const pattern of phonePatterns) {
         const phoneMatch = message.match(pattern);
-        if (phoneMatch && phoneMatch[1]) {
-          extractedData.phone = phoneMatch[1];
-          break;
+        if (phoneMatch) {
+          let phone;
+          if (phoneMatch[0].startsWith('+57')) {
+            phone = phoneMatch[0]; // Ya tiene formato +57
+          } else if (phoneMatch[2] && phoneMatch[2].length === 10) {
+            phone = '+57' + phoneMatch[2]; // Agregar +57 a número de 10 dígitos
+          } else if (phoneMatch[1] && phoneMatch[1].length === 10) {
+            phone = '+57' + phoneMatch[1]; // Agregar +57 a número de 10 dígitos
+          } else if (phoneMatch[0].length === 10) {
+            phone = '+57' + phoneMatch[0]; // Agregar +57 a número de 10 dígitos
+          }
+          
+          if (phone) {
+            extractedData.phone = phone;
+            console.log('🔍 [VEHICLE AGENT DEBUG] Teléfono extraído del mensaje:', extractedData.phone);
+            break;
+          }
         }
       }
       
@@ -202,7 +219,10 @@ export const vehicleServiceNode = async (
         };
       }
       
-      // Actualizar datos si se encontraron
+      // 🔍 DEBUG: Mostrar estado inicial de vehicleInsuranceData
+      console.log('🔍 [VEHICLE AGENT DEBUG] Estado inicial de vehicleInsuranceData:', state.vehicleInsuranceData);
+      
+      // Actualizar datos si se encontraron (solo si no existen ya)
       if (extractedData.fullName && !state.vehicleInsuranceData.fullName) {
         state.vehicleInsuranceData.fullName = extractedData.fullName;
       }
@@ -214,6 +234,7 @@ export const vehicleServiceNode = async (
       }
       if (extractedData.phone && !state.vehicleInsuranceData.phone) {
         state.vehicleInsuranceData.phone = extractedData.phone;
+        console.log('🔍 [VEHICLE AGENT DEBUG] Teléfono asignado al state:', state.vehicleInsuranceData.phone);
       }
       if (extractedData.vehicleBrand && !state.vehicleInsuranceData.vehicleBrand) {
         state.vehicleInsuranceData.vehicleBrand = extractedData.vehicleBrand;
@@ -271,11 +292,62 @@ export const vehicleServiceNode = async (
         // Todos los datos ESENCIALES están completos - ENVIAR EMAIL DIRECTAMENTE
         console.log('🎉 [VEHICLE AGENT] Datos esenciales capturados (6 campos), enviando email...');
         
+        // 🔍 BUSCAR CÉDULA DEL CLIENTE SI TENEMOS TELÉFONO Y NO CÉDULA
+        let finalClientDocument = state.vehicleInsuranceData.cedula || 'No proporcionado';
+        let finalClientName = state.vehicleInsuranceData.fullName || 'No proporcionado';
+        
+        // 🐛 DEBUG: Agregar logs detallados para identificar el problema
+        console.log('🔍 [VEHICLE AGENT DEBUG] Estado antes de búsqueda automática:');
+        console.log('   - Teléfono:', state.vehicleInsuranceData.phone);
+        console.log('   - Cédula actual:', state.vehicleInsuranceData.cedula);
+        console.log('   - Tiene teléfono:', !!state.vehicleInsuranceData.phone);
+        console.log('   - NO tiene cédula:', !state.vehicleInsuranceData.cedula);
+        console.log('   - Condición cumplida:', !!(state.vehicleInsuranceData.phone && !state.vehicleInsuranceData.cedula));
+        
+        if (state.vehicleInsuranceData.phone && !state.vehicleInsuranceData.cedula) {
+          try {
+            console.log('🔍 [VEHICLE AGENT] Buscando datos del cliente en base de datos con teléfono:', state.vehicleInsuranceData.phone);
+            const clientData = await searchDentixClientByPhone(state.vehicleInsuranceData.phone);
+            
+            console.log('🔍 [VEHICLE AGENT DEBUG] Resultado de búsqueda:', clientData);
+            
+            if (clientData && clientData.document_id) {
+              finalClientDocument = clientData.document_id;
+              console.log('✅ [VEHICLE AGENT] Cédula encontrada en base de datos:', finalClientDocument);
+              
+              // También actualizamos el nombre si no lo teníamos
+              if (!state.vehicleInsuranceData.fullName && clientData.name) {
+                finalClientName = clientData.name;
+                console.log('✅ [VEHICLE AGENT] Nombre encontrado en base de datos:', finalClientName);
+              }
+            } else {
+              console.log('ℹ️ [VEHICLE AGENT] No se encontró cédula en la base de datos para el teléfono proporcionado');
+            }
+          } catch (error) {
+            console.error('❌ [VEHICLE AGENT] Error buscando datos del cliente:', error);
+            // Continuamos con 'No proporcionado' si hay error
+          }
+        } else {
+          console.log('❌ [VEHICLE AGENT DEBUG] NO se ejecutó búsqueda automática');
+          if (!state.vehicleInsuranceData.phone) {
+            console.log('   - Razón: No hay teléfono en vehicleInsuranceData');
+          }
+          if (state.vehicleInsuranceData.cedula) {
+            console.log('   - Razón: Ya hay cédula en vehicleInsuranceData:', state.vehicleInsuranceData.cedula);
+          }
+        }
+        
+        // 🐛 DEBUG: Mostrar datos finales que se enviarán en el email
+        console.log('📧 [VEHICLE AGENT DEBUG] Datos finales para email:');
+        console.log('   - Nombre final:', finalClientName);
+        console.log('   - Cédula final:', finalClientDocument);
+        console.log('   - Teléfono final:', state.vehicleInsuranceData.phone || 'No proporcionado');
+        
         // Llamar directamente la herramienta en lugar de invocar el agente
         try {
           const emailResult = await sendVehicleQuoteEmailTool.func({
-            clientName: state.vehicleInsuranceData.fullName || 'No proporcionado',
-            clientDocument: state.vehicleInsuranceData.cedula || 'No proporcionado', 
+            clientName: finalClientName,
+            clientDocument: finalClientDocument,
             clientBirthDate: state.vehicleInsuranceData.birthDate!,
             clientPhone: state.vehicleInsuranceData.phone || 'No proporcionado',
             vehicleBrand: state.vehicleInsuranceData.vehicleBrand!,

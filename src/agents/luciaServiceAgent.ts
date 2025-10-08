@@ -6,7 +6,7 @@ import { SystemMessage } from "@langchain/core/messages";
 import { AgentState } from "./agentState.js";
 import { llm } from "../config/llm.js";
 import { MESSAGES } from '../config/constants.js';
-import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, consultAutosSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool, sendVehicleQuoteEmailTool } from "../tools/tools.js";
+import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, consultAutosSpecialistTool, consultSoatSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool, sendVehicleQuoteEmailTool } from "../tools/tools.js";
 import { END } from "@langchain/langgraph";
 
 dotenv.config();
@@ -19,6 +19,7 @@ const luciaServiceAgent = createReactAgent({
         consultVidaDeudorSpecialistTool,
         consultBienestarSpecialistTool, // <-- Nueva herramienta para Bienestar Plus
         consultAutosSpecialistTool, // <-- Nueva herramienta para seguros de autos
+        consultSoatSpecialistTool, // <-- Nueva herramienta para seguros SOAT
         //consultInsuranceSpecialistTool,
         searchDentixClientTool,
         extractPhoneNumberTool,
@@ -51,6 +52,22 @@ export const luciaServiceNode = async (
           
           let greeting;
           if (clientInfo.service === 'autos') {
+            // ✅ INICIALIZAR vehicleInsuranceData con datos del cliente identificado
+            if (!state.vehicleInsuranceData) {
+              state.vehicleInsuranceData = {
+                fullName: clientInfo.name,
+                cedula: clientInfo.document_id || null, // ✅ ASIGNAR CÉDULA DESDE BD
+                birthDate: null,
+                phone: phoneNumber,
+                vehicleBrand: null,
+                vehicleModel: null,
+                vehicleYear: null,
+                vehiclePlate: null,
+                vehicleCity: null
+              };
+              console.log('🔍 [LUCIA] Cliente de autos identificado, inicializando vehicleInsuranceData:', state.vehicleInsuranceData);
+            }
+            
             // Cliente existente con seguros de autos: activar modo especialista en autos
             greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE ÚNICAMENTE: Hola ${clientInfo.name}, veo que estás interesado en todo lo que tiene que ver con seguros de autos y estoy aquí para ayudarte con todas las dudas que tengas.
 
@@ -59,6 +76,7 @@ DATOS DEL CLIENTE (SOLO PARA PRIMERA INTERACCIÓN):
 - Teléfono: ${phoneNumber}
 - Servicio: ${clientInfo.service}
 - Producto: ${clientInfo.product || 'No especificado'}
+${clientInfo.document_id ? `- Cédula: ${clientInfo.document_id}` : ''}
 
 INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
 
@@ -71,6 +89,51 @@ INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
 IMPORTANTE: En mensajes posteriores de esta misma conversación, NO repitas su nombre constantemente. Manténte natural y directo como especialista en seguros vehiculares.
 
 TONO: Personalizado y especializado en el primer mensaje, experto y convincente en mensajes siguientes.`;
+          } else if (clientInfo.service === 'bienestar') {
+            // Cliente existente con seguro Bienestar Plus: activar modo especialista en bienestar
+            greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE ÚNICAMENTE: ¡Hola ${clientInfo.name}! Veo que tienes interés en nuestro seguro Bienestar Plus y estoy aquí para ayudarte con todas las dudas que tengas sobre este increíble plan de protección individual integral.
+
+DATOS DEL CLIENTE (SOLO PARA PRIMERA INTERACCIÓN):
+- Nombre: ${clientInfo.name}
+- Teléfono: ${phoneNumber}
+- Servicio: ${clientInfo.service}
+${clientInfo.document_id ? `- Cédula: ${clientInfo.document_id}` : ''}
+
+INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
+
+1. **SALUDO PERSONALIZADO:** Salúdalo por su nombre de manera cálida y entusiasta (SOLO EN ESTE PRIMER MENSAJE)
+2. **ESPECIALISTA EN BIENESTAR:** Identifícate como especialista en seguros Bienestar Plus de Coltefinanciera
+3. **ATENCIÓN PERSONALIZADA:** Menciona que ves su interés en el seguro Bienestar Plus y estás aquí para ayudarle con todas sus dudas sobre este plan de protección individual
+4. **ACTIVACIÓN AUTOMÁTICA:** Para CUALQUIER consulta relacionada con Bienestar Plus, usa INMEDIATAMENTE la herramienta 'consult_bienestar_specialist' con la consulta del cliente
+5. **PERSISTENCIA COMERCIAL:** Sé muy insistente pero amable para convencer al cliente sobre los beneficios del seguro Bienestar Plus
+6. **ENFOQUE DE VENTA:** Pregúntale qué aspectos del seguro le gustaría conocer mejor para tomar la mejor decisión para su bienestar
+
+IMPORTANTE: En mensajes posteriores de esta misma conversación, NO repitas su nombre constantemente. Manténte natural y directo como especialista en seguros de bienestar individual.
+
+TONO: Personalizado y comercial en el primer mensaje, experto y convincente en mensajes siguientes.`;
+          } else if (clientInfo.service === 'soat') {
+            // Cliente existente con seguros SOAT: activar modo especialista en SOAT
+            greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE ÚNICAMENTE: ¡Hola ${clientInfo.name}! Veo que estás interesado en el SOAT (Seguro Obligatorio de Accidentes de Tránsito) y estoy aquí para ayudarte con todas las dudas que tengas sobre este seguro obligatorio.
+
+DATOS DEL CLIENTE (SOLO PARA PRIMERA INTERACCIÓN):
+- Nombre: ${clientInfo.name}
+- Teléfono: ${phoneNumber}
+- Servicio: ${clientInfo.service}
+- Producto: ${clientInfo.product || 'No especificado'}
+${clientInfo.document_id ? `- Cédula: ${clientInfo.document_id}` : ''}
+
+INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
+
+1. **SALUDO PERSONALIZADO:** Salúdalo por su nombre de manera cálida (SOLO EN ESTE PRIMER MENSAJE)
+2. **ESPECIALISTA EN SOAT:** Identifícate como especialista en seguros SOAT de Coltefinanciera
+3. **ATENCIÓN PERSONALIZADA:** Menciona que ves su interés en el SOAT y estás aquí para ayudarle con todas sus dudas sobre el seguro obligatorio
+4. **ACTIVACIÓN AUTOMÁTICA:** Para CUALQUIER consulta relacionada con SOAT, usa INMEDIATAMENTE la herramienta 'consult_soat_specialist' con la consulta del cliente
+5. **PERSISTENCIA LEGAL:** Sé muy insistente pero amable para convencer al cliente sobre la importancia legal del SOAT
+6. **ENFOQUE LEGAL:** Enfatiza que el SOAT es OBLIGATORIO por ley y las consecuencias de no tenerlo
+
+IMPORTANTE: En mensajes posteriores de esta misma conversación, NO repitas su nombre constantemente. Manténte natural y directo como especialista en seguros SOAT obligatorios.
+
+TONO: Personalizado y especializado en el primer mensaje, experto y convincente con enfoque legal en mensajes siguientes.`;
           } else if (clientInfo.service === 'vidadeudor') {
             // Cliente existente con vida deudor: informar sobre beneficio especial
             const productInfo = clientInfo.product ? `por haber adquirido tu ${clientInfo.product}` : 'por ser cliente y tener un servicio/crédito';
