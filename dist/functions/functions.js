@@ -1,6 +1,7 @@
 //import colombia from '../data/colombia.json';
 import { searchDentixVectors, searchCredintegralVectors } from './retrievers.js';
 import { createClient } from '@supabase/supabase-js';
+import { getPaymentLink } from '../config/constants.js';
 import dotenv from 'dotenv';
 import sgMail from '@sendgrid/mail';
 dotenv.config();
@@ -377,6 +378,11 @@ export async function registerDentixClient({ name, email, phone_number, service 
 }
 export async function sendPaymentLinkEmail(clientName, clientEmail, insuranceName) {
     console.log(`📧 Intentando enviar correo de pago a ${clientName} (${clientEmail}) por el seguro ${insuranceName}`);
+    // Obtener el enlace de pago específico para el tipo de seguro
+    const paymentLink = getPaymentLink(insuranceName);
+    console.log(`🔗 DEBUG: Nombre del seguro recibido: "${insuranceName}"`);
+    console.log(`🔗 DEBUG: Nombre normalizado: "${insuranceName.toLowerCase().trim()}"`);
+    console.log(`🔗 DEBUG: Enlace generado: ${paymentLink}`);
     const emailContent = `
         Hola ${clientName},
 
@@ -384,7 +390,7 @@ export async function sendPaymentLinkEmail(clientName, clientEmail, insuranceNam
 
         Estás a un solo clic de finalizar la adquisición de tu seguro. Por favor, utiliza el siguiente enlace para completar el pago de forma segura.
 
-        Enlace de pago: https://pagos.coltefinanciera.com/12345?cliente=${encodeURIComponent(clientEmail)}
+        Enlace de pago: ${paymentLink}?cliente=${encodeURIComponent(clientEmail)}
 
         Gracias por confiar en Coltefinanciera Seguros.
 
@@ -407,7 +413,7 @@ export async function sendPaymentLinkEmail(clientName, clientEmail, insuranceNam
     }
     try {
         await sgMail.send(msg);
-        console.log(`✅ Correo enviado exitosamente a ${clientEmail}`);
+        console.log(`✅ Correo enviado exitosamente a ${clientEmail} con enlace: ${paymentLink}`);
         return JSON.stringify({
             success: true,
             message: `Correo con enlace de pago enviado exitosamente a ${clientEmail}.`
@@ -425,46 +431,992 @@ export async function sendPaymentLinkEmail(clientName, clientEmail, insuranceNam
     }
 }
 /**
+ * Confirma los datos del cliente existente y permite actualizarlos si es necesario
+ * @param phoneNumber - Número de teléfono del cliente
+ * @param updates - Objeto con los campos a actualizar (opcional)
+ * @returns Información del cliente y confirmación de la operación
+ */
+export async function confirmAndUpdateClientData(phoneNumber, updates) {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+    console.log(`🔍 Confirmando datos del cliente con número: ${phoneNumber}`);
+    try {
+        // Primero buscar el cliente existente
+        const searchVariations = [
+            phoneNumber,
+            `+${phoneNumber}`,
+            `+57${phoneNumber}`
+        ];
+        let clientData = null;
+        for (const variation of searchVariations) {
+            const { data, error } = await supabase
+                .from('dentix_clients')
+                .select('*')
+                .eq('phone_number', variation);
+            if (error) {
+                console.error('❌ Error buscando cliente:', error);
+                continue;
+            }
+            if (data && data.length > 0) {
+                clientData = data[0];
+                console.log(`✅ Cliente encontrado con variación: ${variation}`);
+                break;
+            }
+        }
+        if (!clientData) {
+            return JSON.stringify({
+                success: false,
+                message: 'No se encontró un cliente con ese número de teléfono.'
+            });
+        }
+        // Si no hay actualizaciones, solo devolver los datos actuales para confirmación
+        if (!updates) {
+            console.log('📋 Mostrando datos actuales para confirmación');
+            return JSON.stringify({
+                success: true,
+                action: 'show_current_data',
+                currentData: {
+                    name: clientData.name,
+                    email: clientData.email,
+                    phoneNumber: clientData.phone_number,
+                    service: clientData.service
+                },
+                message: `Estos son tus datos actuales:
+• Nombre: ${clientData.name}
+• Email: ${clientData.email}
+• Número de teléfono: ${clientData.phone_number}
+• Servicio de interés: ${clientData.service}
+
+¿Todos los datos son correctos o hay algo que necesites actualizar?`
+            });
+        }
+        // Si hay actualizaciones, aplicarlas
+        console.log('✏️ Aplicando actualizaciones a los datos del cliente');
+        const fieldsToUpdate = {};
+        if (updates.name && updates.name.trim() !== '') {
+            fieldsToUpdate.name = updates.name.trim();
+        }
+        if (updates.email && updates.email.trim() !== '') {
+            fieldsToUpdate.email = updates.email.trim();
+        }
+        if (updates.phoneNumber && updates.phoneNumber.trim() !== '') {
+            // Normalizar el nuevo número de teléfono
+            const cleanPhone = updates.phoneNumber.replace(/\D/g, '');
+            if (cleanPhone.startsWith('57')) {
+                fieldsToUpdate.phone_number = `+${cleanPhone}`;
+            }
+            else if (cleanPhone.startsWith('3')) {
+                fieldsToUpdate.phone_number = `+57${cleanPhone}`;
+            }
+            else {
+                fieldsToUpdate.phone_number = `+57${cleanPhone}`;
+            }
+        }
+        if (Object.keys(fieldsToUpdate).length === 0) {
+            return JSON.stringify({
+                success: false,
+                message: 'No se proporcionaron datos válidos para actualizar.'
+            });
+        }
+        // Actualizar los datos en la base de datos
+        const { data: updatedData, error: updateError } = await supabase
+            .from('dentix_clients')
+            .update(fieldsToUpdate)
+            .eq('id', clientData.id)
+            .select();
+        if (updateError) {
+            console.error('❌ Error actualizando cliente:', updateError);
+            return JSON.stringify({
+                success: false,
+                message: `Error al actualizar los datos: ${updateError.message}`
+            });
+        }
+        console.log('✅ Datos del cliente actualizados exitosamente');
+        const updatedClient = updatedData[0];
+        return JSON.stringify({
+            success: true,
+            action: 'data_updated',
+            updatedData: {
+                name: updatedClient.name,
+                email: updatedClient.email,
+                phoneNumber: updatedClient.phone_number,
+                service: updatedClient.service
+            },
+            message: `✅ Datos actualizados correctamente:
+• Nombre: ${updatedClient.name}
+• Email: ${updatedClient.email}
+• Número de teléfono: ${updatedClient.phone_number}
+• Servicio de interés: ${updatedClient.service}
+
+Ahora puedes proceder con la adquisición de tu seguro.`
+        });
+    }
+    catch (error) {
+        console.error('❌ Error en confirmAndUpdateClientData:', error);
+        return JSON.stringify({
+            success: false,
+            message: `Error interno: ${error.message}`
+        });
+    }
+}
+/**
+ * Muestra los datos del cliente para confirmación en el flujo de vida deudor
+ * @param phoneNumber - Número de teléfono del cliente
+ * @returns Datos del cliente en formato específico para vida deudor
+ */
+export async function showVidaDeudorClientDataForConfirmation(phoneNumber) {
+    console.log(`🛡️ [VIDA DEUDOR] Mostrando datos para confirmación - Cliente: ${phoneNumber}`);
+    const supabase = createSupabaseClient();
+    try { // Buscar cliente con las variaciones de número
+        const cleanNumber = phoneNumber.replace(/[\s\-\(\)\+]/g, '');
+        const searchVariations = [
+            phoneNumber, // Número original
+            phoneNumber.replace(/[\s\-\(\)]/g, ''), // Sin espacios/guiones
+            cleanNumber, // Sin espacios, guiones, ni +
+            cleanNumber.startsWith('57') ? cleanNumber.substring(2) : cleanNumber, // Sin código país 57
+            `+${cleanNumber}`, // Con + al inicio
+            `+57${cleanNumber.startsWith('57') ? cleanNumber.substring(2) : cleanNumber}`, // +57 + número local
+            cleanNumber.startsWith('57') ? `+57${cleanNumber.substring(2)}` : `+57${cleanNumber}` // Asegurar +57
+        ];
+        // Eliminar duplicados y números vacíos
+        const uniqueVariations = [...new Set(searchVariations)].filter(v => v && v.length >= 10);
+        console.log(`🔍 Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);
+        console.log(`🔍 Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);
+        let clientData = null;
+        for (const variation of uniqueVariations) {
+            const { data, error } = await supabase
+                .from('dentix_clients')
+                .select('document_id, name, phone_number, email, service')
+                .eq('phone_number', variation)
+                .maybeSingle();
+            if (error) {
+                console.error('❌ Error buscando cliente:', error);
+                continue;
+            }
+            if (data) {
+                clientData = data;
+                console.log(`✅ Cliente encontrado con variación: ${variation}`);
+                break;
+            }
+        }
+        if (!clientData) {
+            return 'No se encontró un cliente con ese número de teléfono. ¿Podrías verificar el número y intentar nuevamente?';
+        }
+        // Formatear datos en el formato específico solicitado
+        const formattedData = {
+            document_id: clientData.document_id || 'No registrado', // cédula
+            name: clientData.name || 'No registrado', // nombre
+            phone_number: clientData.phone_number || 'No registrado', // celular
+            email: clientData.email || 'No registrado' // correo electrónico
+        };
+        const confirmationMessage = `🛡️ **CONFIRMACIÓN DE DATOS PARA ASISTENCIA VIDA DEUDOR**
+
+Por favor confirma que estos datos son correctos:
+
+📋 **Cédula:** ${formattedData.document_id}
+👤 **Nombre:** ${formattedData.name}
+📱 **Celular:** ${formattedData.phone_number}
+📧 **Correo electrónico:** ${formattedData.email}
+
+¿Todos los datos son correctos o necesitas modificar alguno antes de activar tu asistencia Vida Deudor?`;
+        console.log(`✅ Datos formateados para confirmación:`, formattedData);
+        return confirmationMessage;
+    }
+    catch (error) {
+        console.error('❌ Error en showVidaDeudorClientDataForConfirmation:', error);
+        return `Error interno al buscar tus datos: ${error.message}. Por favor intenta nuevamente.`;
+    }
+}
+/**
+ * Actualiza datos específicos de un cliente para el flujo de vida deudor
+ * @param phoneNumber - Número de teléfono del cliente
+ * @param updates - Datos a actualizar (document_id, name, phone_number, email)
+ * @returns Resultado de la actualización
+ */
+export async function updateVidaDeudorClientData(phoneNumber, updates) {
+    console.log(`🛡️ [VIDA DEUDOR] Actualizando datos del cliente: ${phoneNumber}`);
+    const supabase = createSupabaseClient();
+    try {
+        // Buscar cliente con las variaciones de número (misma lógica que showVidaDeudorClientDataForConfirmation)
+        const cleanNumber = phoneNumber.replace(/[\s\-\(\)\+]/g, '');
+        const searchVariations = [
+            phoneNumber, // Número original
+            phoneNumber.replace(/[\s\-\(\)]/g, ''), // Sin espacios/guiones
+            cleanNumber, // Sin espacios, guiones, ni +
+            cleanNumber.startsWith('57') ? cleanNumber.substring(2) : cleanNumber, // Sin código país 57
+            `+${cleanNumber}`, // Con + al inicio
+            `+57${cleanNumber.startsWith('57') ? cleanNumber.substring(2) : cleanNumber}`, // +57 + número local
+            cleanNumber.startsWith('57') ? `+57${cleanNumber.substring(2)}` : `+57${cleanNumber}` // Asegurar +57
+        ];
+        // Eliminar duplicados y números vacíos
+        const uniqueVariations = [...new Set(searchVariations)].filter(v => v && v.length >= 10);
+        console.log(`🔍 [UPDATE] Variaciones de búsqueda para "${phoneNumber}":`, uniqueVariations);
+        let clientData = null;
+        for (const variation of uniqueVariations) {
+            const { data, error } = await supabase
+                .from('dentix_clients')
+                .select('*')
+                .eq('phone_number', variation)
+                .maybeSingle();
+            if (error) {
+                console.error('❌ Error buscando cliente:', error);
+                continue;
+            }
+            if (data) {
+                clientData = data;
+                console.log(`✅ Cliente encontrado con variación: ${variation}`);
+                break;
+            }
+        }
+        if (!clientData) {
+            return JSON.stringify({
+                success: false,
+                message: 'No se encontró un cliente con ese número de teléfono.'
+            });
+        }
+        // Preparar campos a actualizar
+        const fieldsToUpdate = {};
+        if (updates.document_id && updates.document_id.trim() !== '') {
+            fieldsToUpdate.document_id = updates.document_id.trim();
+        }
+        if (updates.name && updates.name.trim() !== '') {
+            fieldsToUpdate.name = updates.name.trim();
+        }
+        if (updates.email && updates.email.trim() !== '') {
+            fieldsToUpdate.email = updates.email.trim();
+        }
+        if (updates.phone_number && updates.phone_number.trim() !== '') {
+            const cleanPhone = updates.phone_number.replace(/\D/g, '');
+            if (cleanPhone.startsWith('57')) {
+                fieldsToUpdate.phone_number = `+${cleanPhone}`;
+            }
+            else if (cleanPhone.startsWith('3')) {
+                fieldsToUpdate.phone_number = `+57${cleanPhone}`;
+            }
+            else {
+                fieldsToUpdate.phone_number = `+57${cleanPhone}`;
+            }
+        }
+        if (Object.keys(fieldsToUpdate).length === 0) {
+            return JSON.stringify({
+                success: false,
+                message: 'No se proporcionaron datos válidos para actualizar.'
+            });
+        }
+        // Actualizar en la base de datos
+        const { data: updatedData, error: updateError } = await supabase
+            .from('dentix_clients')
+            .update(fieldsToUpdate)
+            .eq('id', clientData.id)
+            .select();
+        if (updateError) {
+            console.error('❌ Error actualizando cliente:', updateError);
+            return JSON.stringify({
+                success: false,
+                message: `Error al actualizar los datos: ${updateError.message}`
+            });
+        }
+        console.log('✅ Datos del cliente actualizados exitosamente para vida deudor');
+        const updatedClient = updatedData[0];
+        return JSON.stringify({
+            success: true,
+            action: 'vida_deudor_data_updated',
+            updatedData: {
+                document_id: updatedClient.document_id || 'No registrado',
+                name: updatedClient.name,
+                email: updatedClient.email,
+                phone_number: updatedClient.phone_number
+            },
+            message: `✅ Datos actualizados correctamente:
+
+📋 **Cédula:** ${updatedClient.document_id || 'No registrado'}
+👤 **Nombre:** ${updatedClient.name}
+📱 **Celular:** ${updatedClient.phone_number}
+📧 **Correo electrónico:** ${updatedClient.email}
+
+¡Perfecto! Ahora puedes proceder con la activación de tu asistencia Vida Deudor.`
+        });
+    }
+    catch (error) {
+        console.error('❌ Error en updateVidaDeudorClientData:', error);
+        return JSON.stringify({
+            success: false,
+            message: `Error interno: ${error.message}`
+        });
+    }
+}
+/**
+ * Busca información en los documentos de Bienestar Plus SOLO EN SUPABASE
+ * @param query - La consulta del usuario
+ * @returns Resultados formateados de la búsqueda
+ */
+export async function searchBienestarDocuments(query) {
+    console.log('🔍 [BIENESTAR PLUS] Procesando consulta SOLO EN SUPABASE:', query);
+    try {
+        console.log('🔄 Intentando búsqueda vectorial en Supabase...');
+        const { searchBienestarVectors } = await import('./retrievers');
+        const supabaseResults = await searchBienestarVectors(query);
+        if (supabaseResults && supabaseResults.length > 0) {
+            console.log('✅ Usando resultados de Supabase para Bienestar Plus');
+            return formatSupabaseResults(supabaseResults, "Bienestar Plus");
+        }
+        return "Lo siento, no encontré información específica sobre tu consulta en los documentos de Bienestar Plus. ¿Podrías reformular tu pregunta o ser más específico?";
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Error al buscar en Supabase para Bienestar Plus:', errorMessage);
+        return "Lo siento, ocurrió un error al buscar en los documentos de Bienestar Plus. Por favor intenta nuevamente.";
+    }
+}
+/**
+ * Extrae una sección específica del contenido de Bienestar Plus
+ * @param content - Contenido del documento
+ * @param type - Tipo de sección: 'precio', 'cobertura', 'beneficios', 'asistenciales'
+ * @returns Texto extraído o null
+ */
+export function extractBienestarSection(content, type) {
+    const lines = content.split('\n');
+    let sectionTitles = [];
+    let sectionName = '';
+    switch (type) {
+        case 'precio':
+            sectionTitles = ['propuesta económica', 'tarifa', 'precio', 'valor', 'costo'];
+            sectionName = 'PRECIOS Y TARIFAS';
+            break;
+        case 'cobertura':
+            sectionTitles = ['cobertura', 'servicios cubiertos', 'qué cubre', 'servicios incluidos'];
+            sectionName = 'COBERTURA';
+            break;
+        case 'beneficios':
+            sectionTitles = ['beneficios', 'ventajas', 'beneficio'];
+            sectionName = 'BENEFICIOS';
+            break;
+        case 'asistenciales':
+            sectionTitles = ['asistenciales', 'servicios asistenciales', 'asistencia'];
+            sectionName = 'ASISTENCIALES';
+            break;
+        default:
+            return null;
+    }
+    // Buscar la línea que contiene el título de la sección
+    let startIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].toLowerCase();
+        if (sectionTitles.some(title => line.includes(title))) {
+            startIdx = i;
+            break;
+        }
+    }
+    // Si no hay título pero es consulta de precio y el chunk contiene un monto, devolver el bloque completo
+    if (type === 'precio' && startIdx === -1) {
+        const montoRegex = /\$\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?/;
+        for (let i = 0; i < lines.length; i++) {
+            if (montoRegex.test(lines[i])) {
+                // Devolver todo el bloque que contiene la tarifa
+                return lines.join('\n').trim();
+            }
+        }
+        return null;
+    }
+    if (startIdx === -1)
+        return null;
+    // Extraer hasta la siguiente sección o hasta 10 líneas, pero si es precio y hay monto, no cortar por líneas vacías ni separadores
+    let extracted = `📋 **${sectionName}**\n`;
+    let foundMonto = false;
+    const montoRegex = /\$\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?/;
+    for (let j = startIdx; j < lines.length; j++) {
+        const l = lines[j];
+        if (type === 'precio' && montoRegex.test(l))
+            foundMonto = true;
+        // Si detecta el inicio de otra sección, corta (excepto si es precio y aún no encontró monto)
+        if (j !== startIdx && /^([A-ZÁÉÍÓÚÑ ]{5,}|\*\*.+\*\*)$/.test(l.trim()) && (type !== 'precio' || foundMonto))
+            break;
+        extracted += l + '\n';
+        // Si es precio y ya encontró monto y hay línea vacía después, corta
+        if (type === 'precio' && foundMonto && l.trim() === '' && lines[j + 1] && lines[j + 1].trim() === '')
+            break;
+    }
+    return extracted.trim();
+}
+/**
+ * Envía un correo de activación para la asistencia Vida Deudor
+ * @param clientName - Nombre del cliente
+ * @param clientEmail - Correo electrónico del cliente
+ * @param clientPhone - Número de teléfono del cliente (opcional)
+ * @param clientDocument - Documento del cliente (opcional)
+ * @returns Resultado de la operación
+ */
+export async function sendVidaDeudorActivationEmail(clientName, clientEmail, clientPhone, clientDocument) {
+    console.log(`🚀 [VIDA DEUDOR EMAIL] Iniciando envío para ${clientName} (${clientEmail})`);
+    console.log(`📋 Datos recibidos: nombre=${clientName}, email=${clientEmail}, phone=${clientPhone}, doc=${clientDocument}`);
+    if (!process.env.SENDGRID_API_KEY) {
+        const errorMsg = 'SendGrid API Key no configurado';
+        console.error(`❌ ${errorMsg}`);
+        return JSON.stringify({
+            success: false,
+            message: errorMsg
+        });
+    }
+    // 📧 USAR MÉTODO OFICIAL SENDGRID: ARRAY DE EMAILS
+    const multipleMessages = [
+        {
+            to: clientEmail,
+            from: {
+                email: "notificaciones@asistenciacoltefinanciera.com",
+                name: "Coltefinanciera Seguros"
+            },
+            replyTo: "atencion@asistenciacoltefinanciera.com",
+            subject: "✅ Tu Asistencia Vida Deudor ha sido activada",
+            text: `Hola ${clientName},
+
+¡Excelentes noticias! Tu asistencia Vida Deudor ha sido activada exitosamente.
+
+Como cliente especial de Coltefinanciera, disfrutarás de 3 meses completamente gratis de cobertura.
+
+Tu asistencia incluye:
+• Teleconsulta medicina general (2 eventos por año)
+• Telenutrición ilimitada
+• Telepsicología (2 eventos por año)
+• Descuentos ilimitados en farmacias
+
+Tu cobertura está activa desde este momento y no requiere ningún pago adicional durante los primeros 3 meses.
+
+Gracias por confiar en Coltefinanciera Seguros.
+
+Saludos,
+Lucia
+Asesora de Seguros
+Coltefinanciera Seguros`,
+            html: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Activación Vida Deudor</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px;">
+        <h2 style="color: #2c3e50;">¡Tu Asistencia Vida Deudor está Activada!</h2>
+
+        <p>Hola <strong>${clientName}</strong>,</p>
+
+        <p>¡Excelentes noticias! Tu asistencia Vida Deudor ha sido activada exitosamente.</p>
+
+        <p>Como cliente especial de Coltefinanciera, disfrutarás de <strong>3 meses completamente gratis</strong> de cobertura.</p>
+
+        <h3 style="color: #27ae60;">Tu asistencia incluye:</h3>
+        <ul>
+            <li>Teleconsulta medicina general (2 eventos por año)</li>
+            <li>Telenutrición ilimitada</li>
+            <li>Telepsicología (2 eventos por año)</li>
+            <li>Descuentos ilimitados en farmacias</li>
+        </ul>
+
+        <p style="background-color: #e8f5e8; padding: 15px; border-radius: 5px;">
+            <strong>Tu cobertura está activa desde este momento</strong> y no requiere ningún pago adicional durante los primeros 3 meses.
+        </p>
+
+        <p>Gracias por confiar en Coltefinanciera Seguros.</p>
+
+        <p>Saludos,<br>
+        <strong>Lucia</strong><br>
+        Asesora de Seguros<br>
+        Coltefinanciera Seguros</p>
+
+        <hr style="margin: 20px 0;">
+        <p style="font-size: 12px; color: #666;">
+            Este correo fue enviado desde nuestro sistema automatizado de activación de seguros.
+        </p>
+    </div>
+</body>
+</html>`,
+            categories: ["vida-deudor", "activacion", "cliente"],
+            customArgs: {
+                "client_email": clientEmail,
+                "client_name": clientName,
+                "service": "vida_deudor",
+                "type": "activation"
+            }
+        },
+        {
+            to: "mariana.b@ultimmarketing.com",
+            from: {
+                email: "notificaciones@asistenciacoltefinanciera.com",
+                name: "Sistema Coltefinanciera"
+            },
+            subject: "🔔 Nueva activación de Vida Deudor - " + clientName,
+            text: `Estimado Daniel,
+
+Te informamos que un nuevo cliente ha activado el servicio de Vida Deudor.
+
+DATOS DEL CLIENTE:
+📋 Nombre: ${clientName}
+📧 Correo: ${clientEmail}
+📱 Teléfono: ${clientPhone || 'No proporcionado'}
+🆔 Documento: ${clientDocument || 'No proporcionado'}
+📅 Fecha de activación: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
+
+El cliente ha recibido su correo de confirmación y ya tiene acceso a los beneficios de la asistencia Vida Deudor por 3 meses gratis.
+
+Saludos,
+Sistema Coltefinanciera`,
+            html: `<h3>Nueva activación de Vida Deudor</h3>
+<p>Estimado Daniel,</p>
+<p>Te informamos que un nuevo cliente ha activado el servicio de Vida Deudor.</p>
+<h4>DATOS DEL CLIENTE:</h4>
+<ul>
+<li><strong>Nombre:</strong> ${clientName}</li>
+<li><strong>Correo:</strong> ${clientEmail}</li>
+<li><strong>Teléfono:</strong> ${clientPhone || 'No proporcionado'}</li>
+<li><strong>Documento:</strong> ${clientDocument || 'No proporcionado'}</li>
+<li><strong>Fecha:</strong> ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</li>
+</ul>
+<p>El cliente ha recibido su correo de confirmación y ya tiene acceso a los beneficios de la asistencia Vida Deudor por 3 meses gratis.</p>
+<p>Saludos,<br>Sistema Coltefinanciera</p>`,
+            categories: ["vida-deudor", "activacion", "admin"]
+        }
+    ];
+    try {
+        console.log('📧 USANDO MÉTODO OFICIAL SENDGRID: Array de emails');
+        console.log(`   📧 Email 1: Cliente (${clientEmail})`);
+        console.log(`   📧 Email 2: Admin (mariana.b@ultimmarketing.com)`);
+        const results = await sgMail.send(multipleMessages);
+        console.log(`✅ ENVÍO COMPLETADO: ${results.length} emails procesados`);
+        let clientSent = false;
+        let adminSent = false;
+        let clientMessageId = null;
+        let adminMessageId = null;
+        results.forEach((result, index) => {
+            const email = multipleMessages[index].to;
+            const status = result.statusCode || 'unknown';
+            const messageId = result.headers?.['x-message-id'] || null;
+            console.log(`   ✅ Email ${index + 1} (${email}): Status ${status}, MessageID: ${messageId}`);
+            if (email === clientEmail) {
+                clientSent = true;
+                clientMessageId = messageId;
+            }
+            else if (email === "mariana.b@ultimmarketing.com") {
+                adminSent = true;
+                adminMessageId = messageId;
+            }
+        });
+        const success = clientSent && adminSent;
+        console.log(`📊 RESULTADO FINAL:`);
+        console.log(`   Cliente (${clientEmail}): ${clientSent ? '✅ ENVIADO' : '❌ ERROR'}`);
+        console.log(`   Admin: ${adminSent ? '✅ ENVIADO' : '❌ ERROR'}`);
+        console.log(`   Éxito general: ${success ? '✅ SÍ' : '❌ NO'}`);
+        return JSON.stringify({
+            success: success,
+            message: success
+                ? `✅ CORREOS ENVIADOS EXITOSAMENTE a ${clientEmail} y al administrador`
+                : `❌ Error en el envío de emails`,
+            details: {
+                clientSent,
+                adminSent,
+                clientEmail,
+                clientMessageId,
+                adminMessageId,
+                totalEmailsSent: results.length,
+                method: "sendgrid_array_official",
+                timestamp: new Date().toISOString()
+            }
+        });
+    }
+    catch (error) {
+        console.error('❌ ERROR EN ENVÍO DE EMAILS:', error.message);
+        if (error.response && error.response.body) {
+            console.error('📋 Detalles del error:', JSON.stringify(error.response.body, null, 2));
+        }
+        return JSON.stringify({
+            success: false,
+            message: `Error al enviar correos: ${error.message}`,
+            details: {
+                errorType: error.code || 'unknown',
+                errorMessage: error.message,
+                clientEmail,
+                method: "sendgrid_array_official"
+            }
+        });
+    }
+}
+/**
+ * Busca información específica en los documentos de autos almacenados en Supabase
+ * @param query - La consulta del usuario para buscar en los documentos de autos
+ * @returns Resultados de la búsqueda o mensaje de error
+ */
+export async function searchAutosDocuments(query) {
+    console.log('🚗 Buscando en documentos de autos:', query);
+    // DETECTAR CONSULTAS DE PRECIO Y RESPONDER CON INFORMACIÓN MEJORADA
+    const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta|cuestan|cuesta|cobran|cobrar/i.test(query);
+    if (isPriceQuery) {
+        console.log('💰 [PRECIO DETECTADO] Respondiendo con información completa de datos requeridos');
+        return `💰 **INFORMACIÓN SOBRE PRECIOS DE SEGUROS DE AUTOS**
+
+El precio del seguro vehicular varía según múltiples factores del vehículo y del conductor. Para generar una cotización personalizada y precisa, necesito la siguiente información:
+
+📋 **DATOS DEL VEHÍCULO:**
+• **Marca del vehículo** (Ej: Toyota, Chevrolet, Nissan)
+• **Modelo del vehículo** (Ej: Corolla, Aveo, Sentra)  
+• **Año del vehículo** (modelo y año de fabricación)
+• **Placa del vehículo** (para verificar historial y características)
+• **Ciudad de circulación** (donde se usa principalmente el vehículo)
+
+👤 **DATOS DEL CONDUCTOR:**
+• **Fecha de nacimiento** (para calcular la edad y experiencia)
+
+🎯 **¿POR QUÉ NECESITAMOS ESTA INFORMACIÓN?**
+• La **marca, modelo y año** determinan el valor comercial y riesgo del vehículo
+• La **fecha de nacimiento** influye en las tarifas según la experiencia del conductor
+• La **ciudad de circulación** afecta el riesgo por zona geográfica  
+• La **placa** nos permite verificar el historial del vehículo
+
+Una vez que tengas esta información completa, podremos generar una cotización personalizada con los mejores precios y coberturas para tu vehículo.
+
+¿Te gustaría proporcionarme estos datos para proceder con tu cotización?`;
+    }
+    try {
+        // Para consultas que NO son de precio, usar búsqueda vectorial
+        console.log('🔄 Intentando búsqueda vectorial en Supabase...');
+        const { searchAutosVectors } = await import('./retrievers');
+        const supabaseResults = await searchAutosVectors(query);
+        if (supabaseResults && supabaseResults.length > 0) {
+            console.log('✅ Usando resultados vectoriales para seguros de autos');
+            return formatSupabaseResults(supabaseResults, "Seguros de Autos");
+        }
+        // Fallback: búsqueda simple en caso de que la vectorial no funcione
+        const supabase = createSupabaseClient();
+        const { data: autosResults, error } = await supabase
+            .from('autos_documents')
+            .select('id, content, metadata')
+            .ilike('content', `%${query}%`)
+            .limit(3);
+        if (error) {
+            console.error('❌ Error en búsqueda fallback:', error);
+            return "Lo siento, ocurrió un error al buscar en los documentos de seguros de autos. Por favor intenta nuevamente.";
+        }
+        if (!autosResults || autosResults.length === 0) {
+            return "Lo siento, no encontré información específica sobre tu consulta en los documentos de seguros de autos. ¿Podrías reformular tu pregunta o ser más específico?";
+        }
+        console.log('✅ Encontrados', autosResults.length, 'resultados en autos_documents');
+        // Formatear resultados usando fallback simple
+        let response = "Según la información de nuestra base de datos de seguros de autos, esto es lo que encontré:\n\n";
+        autosResults.forEach((result, index) => {
+            const title = result.metadata?.title || `Documento de Seguros de Autos #${result.id}`;
+            response += `🚗 **${title}**\n`;
+            response += `${result.content}\n`;
+            if (result.metadata && typeof result.metadata === 'object') {
+                const metaStr = JSON.stringify(result.metadata);
+                if (metaStr !== '{}') {
+                    response += `📄 Información adicional: ${metaStr}\n`;
+                }
+            }
+            if (index < autosResults.length - 1) {
+                response += "\n---\n\n";
+            }
+        });
+        return response;
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Error al buscar en Supabase para seguros de autos:', errorMessage);
+        return "Lo siento, ocurrió un error al buscar en los documentos de seguros de autos. Por favor intenta nuevamente.";
+    }
+}
+/**
+ * Función de prueba para enviar un email simple de vida deudor
+ * @param clientEmail - Email del cliente
+ * @returns Resultado de la operación
+ */
+export async function testSendVidaDeudorEmail(clientEmail) {
+    console.log(`🧪 [TEST] Enviando email de prueba de Vida Deudor a: ${clientEmail}`);
+    const testMsg = {
+        to: clientEmail,
+        from: "notificaciones@asistenciacoltefinanciera.com",
+        subject: "🧪 TEST - Activación Vida Deudor",
+        text: `Hola,
+
+Este es un email de prueba para verificar que los correos de activación de Vida Deudor lleguen correctamente al cliente.
+
+Si recibes este correo, significa que la funcionalidad básica de envío está funcionando.
+
+Datos de la prueba:
+- Destinatario: ${clientEmail}
+- Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
+- Remitente verificado: notificaciones@asistenciacoltefinanciera.com
+
+Saludos,
+Sistema de Pruebas Coltefinanciera`,
+        html: `<h3>🧪 Email de Prueba - Vida Deudor</h3>
+        <p><strong>Hola,</strong></p>
+        <p>Este es un email de prueba para verificar que los correos de activación de Vida Deudor lleguen correctamente al cliente.</p>
+        <p>Si recibes este correo, significa que la funcionalidad básica de envío está funcionando.</p>
+        <h4>Datos de la prueba:</h4>
+        <ul>
+            <li><strong>Destinatario:</strong> ${clientEmail}</li>
+            <li><strong>Fecha:</strong> ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</li>
+            <li><strong>Remitente verificado:</strong> notificaciones@asistenciacoltefinanciera.com</li>
+        </ul>
+        <p><em>Saludos,<br>Sistema de Pruebas Coltefinanciera</em></p>`
+    };
+    if (!process.env.SENDGRID_API_KEY) {
+        return JSON.stringify({
+            success: false,
+            message: 'Error: SENDGRID_API_KEY no configurado'
+        });
+    }
+    try {
+        const result = await sgMail.send(testMsg);
+        console.log(`✅ [TEST] Email de prueba enviado exitosamente a ${clientEmail}`);
+        console.log(`   Status: ${result[0]?.statusCode || 'N/A'}`);
+        return JSON.stringify({
+            success: true,
+            message: `Email de prueba enviado exitosamente a ${clientEmail}`, details: {
+                statusCode: result[0]?.statusCode,
+                to: clientEmail,
+                from: "notificaciones@asistenciacoltefinanciera.com"
+            }
+        });
+    }
+    catch (error) {
+        console.error(`❌ [TEST] Error enviando email de prueba:`, error);
+        if (error.response) {
+            console.error('   Detalles:', JSON.stringify(error.response.body, null, 2));
+        }
+        return JSON.stringify({
+            success: false,
+            message: `Error enviando email de prueba: ${error.message}`,
+            details: {
+                errorType: error.code || 'unknown',
+                to: clientEmail
+            }
+        });
+    }
+}
+/**
+ * Envía correo de notificación de cotización vehicular cuando se capturan todos los datos requeridos
+ * @param clientName - Nombre completo del cliente
+ * @param clientDocument - Cédula del cliente
+ * @param clientBirthDate - Fecha de nacimiento del cliente
+ * @param clientPhone - Número de teléfono del cliente
+ * @param vehicleBrand - Marca del vehículo
+ * @param vehicleModel - Modelo del vehículo
+ * @param vehicleYear - Año del vehículo
+ * @param vehiclePlate - Placa del vehículo
+ * @param vehicleCity - Ciudad de circulación del vehículo
+ * @returns Resultado de la operación
+ */
+export async function sendVehicleQuoteEmail(clientName, clientDocument, clientBirthDate, clientPhone, vehicleBrand, vehicleModel, vehicleYear, vehiclePlate, vehicleCity) {
+    console.log(`🚗 [VEHICLE QUOTE EMAIL] Iniciando envío para ${clientName} - Vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear}`);
+    if (!process.env.SENDGRID_API_KEY) {
+        const errorMsg = 'SendGrid API Key no configurado';
+        console.error(`❌ ${errorMsg}`);
+        return JSON.stringify({
+            success: false,
+            message: errorMsg
+        });
+    }
+    // Formatear fecha para mejor presentación
+    const formattedDate = new Date().toLocaleString('es-CO', {
+        timeZone: 'America/Bogota',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    // 📧 CONFIGURAR EMAILS PARA ENVÍO MÚLTIPLE
+    const multipleMessages = [
+        {
+            to: "danielmoyemanizales@gmail.com",
+            from: {
+                email: "notificaciones@asistenciacoltefinanciera.com",
+                name: "Sistema Coltefinanciera - Seguros Vehiculares"
+            },
+            subject: `🚗 Nueva Cotización Vehicular Pendiente - ${clientName}`,
+            text: `Estimado Daniel,
+
+Se ha capturado información completa de un cliente interesado en seguro vehicular.
+
+DATOS DEL CLIENTE:
+👤 Nombre completo: ${clientName}
+🆔 Cédula: ${clientDocument}
+🎂 Fecha de nacimiento: ${clientBirthDate}
+📱 Teléfono: ${clientPhone}
+
+DATOS DEL VEHÍCULO:
+🚗 Marca: ${vehicleBrand}
+🚙 Modelo: ${vehicleModel}
+📅 Año: ${vehicleYear}
+🔢 Placa: ${vehiclePlate}
+🏙️ Ciudad de circulación: ${vehicleCity}
+
+📅 Fecha de solicitud: ${formattedDate}
+
+Este cliente ha proporcionado toda la información necesaria para generar su cotización vehicular. Te recomendamos contactarlo pronto para continuar con el proceso.
+
+Saludos,
+Sistema de Cotizaciones Coltefinanciera`,
+            html: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Nueva Cotización Vehicular</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; border-left: 5px solid #007bff;">
+        <h2 style="color: #2c3e50; margin-top: 0;">🚗 Nueva Cotización Vehicular Pendiente</h2>
+        
+        <p style="color: #555;">Estimado Daniel,</p>
+        
+        <p style="color: #555;">Se ha capturado información completa de un cliente interesado en seguro vehicular.</p>
+        
+        <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #007bff; margin-top: 0;">👤 DATOS DEL CLIENTE:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Nombre completo:</td>
+                    <td style="padding: 8px 0; color: #555;">${clientName}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Cédula:</td>
+                    <td style="padding: 8px 0; color: #555;">${clientDocument}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Fecha de nacimiento:</td>
+                    <td style="padding: 8px 0; color: #555;">${clientBirthDate}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Teléfono:</td>
+                    <td style="padding: 8px 0; color: #555;">${clientPhone}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #28a745; margin-top: 0;">🚗 DATOS DEL VEHÍCULO:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Marca:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehicleBrand}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Modelo:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehicleModel}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Año:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehicleYear}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Placa:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehiclePlate}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #333;">Ciudad de circulación:</td>
+                    <td style="padding: 8px 0; color: #555;">${vehicleCity}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div style="background-color: #e8f4fd; padding: 15px; border-radius: 5px; border-left: 4px solid #007bff;">
+            <p style="margin: 0; color: #333;"><strong>📅 Fecha de solicitud:</strong> ${formattedDate}</p>
+        </div>
+        
+        <p style="color: #555; margin-top: 20px;">Este cliente ha proporcionado toda la información necesaria para generar su cotización vehicular. Te recomendamos contactarlo pronto para continuar con el proceso.</p>
+        
+        <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
+        
+        <p style="color: #666; font-size: 14px; margin-bottom: 0;">
+            Saludos,<br>
+            <strong>Sistema de Cotizaciones Coltefinanciera</strong>
+        </p>
+    </div>
+</body>
+</html>`,
+            categories: ["seguro-vehicular", "cotizacion", "admin"],
+            customArgs: {
+                "client_name": clientName,
+                "client_phone": clientPhone,
+                "vehicle_brand": vehicleBrand,
+                "vehicle_model": vehicleModel,
+                "vehicle_year": vehicleYear,
+                "service": "seguro_vehicular",
+                "type": "quote_request"
+            }
+        }
+    ];
+    try {
+        console.log('📧 ENVIANDO NOTIFICACIÓN DE COTIZACIÓN VEHICULAR');
+        console.log(`   📧 Destinatario: danielmoyemanizales@gmail.com`);
+        console.log(`   🚗 Vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear} - ${vehiclePlate}`);
+        console.log(`   👤 Cliente: ${clientName} (${clientPhone})`);
+        const results = await sgMail.send(multipleMessages);
+        console.log(`✅ ENVÍO COMPLETADO: ${results.length} email(s) procesado(s)`);
+        let adminSent = false;
+        let adminMessageId = null;
+        results.forEach((result, index) => {
+            const email = multipleMessages[index].to;
+            const status = result.statusCode || 'unknown';
+            const messageId = result.headers?.['x-message-id'] || null;
+            console.log(`   ✅ Email ${index + 1} (${email}): Status ${status}, MessageID: ${messageId}`);
+            if (email === "danielmoyemanizales@gmail.com") {
+                adminSent = true;
+                adminMessageId = messageId;
+            }
+        });
+        console.log(`📊 RESULTADO FINAL:`);
+        console.log(`   Admin (danielmoyemanizales@gmail.com): ${adminSent ? '✅ ENVIADO' : '❌ ERROR'}`);
+        console.log(`   Éxito general: ${adminSent ? '✅ SÍ' : '❌ NO'}`);
+        return JSON.stringify({
+            success: adminSent,
+            message: adminSent
+                ? `✅ Correo de cotización vehicular enviado exitosamente a danielmoyemanizales@gmail.com`
+                : `❌ Error en el envío del correo de cotización vehicular`,
+            details: {
+                adminSent,
+                adminEmail: "danielmoyemanizales@gmail.com",
+                adminMessageId,
+                clientName,
+                clientPhone,
+                vehicleInfo: `${vehicleBrand} ${vehicleModel} ${vehicleYear} - ${vehiclePlate}`,
+                vehicleCity,
+                totalEmailsSent: results.length,
+                method: "sendgrid_vehicle_quote",
+                timestamp: new Date().toISOString()
+            }
+        });
+    }
+    catch (error) {
+        console.error('❌ ERROR EN ENVÍO DE COTIZACIÓN VEHICULAR:', error.message);
+        if (error.response && error.response.body) {
+            console.error('📋 Detalles del error:', JSON.stringify(error.response.body, null, 2));
+        }
+        return JSON.stringify({
+            success: false,
+            message: `Error al enviar correo de cotización vehicular: ${error.message}`,
+            details: {
+                errorType: error.code || 'unknown',
+                errorMessage: error.message,
+                adminEmail: "danielmoyemanizales@gmail.com",
+                clientName,
+                vehicleInfo: `${vehicleBrand} ${vehicleModel} ${vehicleYear}`,
+                method: "sendgrid_vehicle_quote"
+            }
+        });
+    }
+}
+/**
  * Busca información específica en los documentos de SOAT almacenados en Supabase
  * @param query - La consulta del usuario para buscar en los documentos de SOAT
  * @returns Resultados de la búsqueda o mensaje de error
  */
 export async function searchSoatDocuments(query) {
     console.log(`🛡️ [SOAT] Procesando consulta: "${query}"`);
-    // PASO 0: DETECTAR SELECCIÓN DE CATEGORÍA (nueva funcionalidad)
-    const categorySelectionResult = await handleCategorySelection(query);
-    if (categorySelectionResult) {
-        console.log('✅ [CATEGORÍA DETECTADA] Procesando selección de categoría');
-        return categorySelectionResult;
-    }
     // PASO 1: DETECTAR CONSULTAS DE PRECIO (EXCLUYENDO MULTAS/SANCIONES)
     const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|cuánto.*cuesta|cuanto.*vale/i.test(query);
     const isFineQuery = /multa|sanción|sancion|deuda|infracción|infraccion|penalidad|castigo|comparendo|contravencion|contravención/i.test(query);
     // Solo activar respuesta de precio si es consulta de precio Y NO es sobre multas/sanciones
     if (isPriceQuery && !isFineQuery) {
-        console.log('💰 [PRECIO DETECTADO] Solicitando categoría del vehículo para precio exacto');
-        try {
-            // Obtener categorías disponibles de la base de datos
-            const categories = await getSoatCategories();
-            if (categories.length > 0) {
-                let response = `💰 **CONSULTA DE PRECIOS SOAT 2025**\n\n`;
-                response += `Para darte el precio exacto del SOAT, necesito saber qué tipo de vehículo tienes.\n\n`;
-                response += `📋 **Selecciona la categoría de tu vehículo:**\n\n`;
-                categories.forEach((category, index) => {
-                    // Convertir nombres técnicos a nombres más amigables
-                    const friendlyName = category
-                        .replace(/_/g, ' ')
-                        .toLowerCase()
-                        .replace(/\b\w/g, (l) => l.toUpperCase());
-                    response += `${index + 1}. **${friendlyName}**\n`;
-                });
-                response += `\n💬 **Responde con el número o nombre de la categoría** (ej: "1" o "Motos")\n\n`;
-                response += `ℹ️ Una vez selecciones la categoría, te mostraré el precio exacto del SOAT para 2025.`;
-                return response;
-            }
-            else {
-                // Fallback en caso de error obteniendo categorías
-                return `💰 **INFORMACIÓN SOBRE PRECIOS DEL SOAT**
+        console.log('💰 [PRECIO DETECTADO] Respondiendo con información completa de datos requeridos para cotización SOAT');
+        return `💰 **INFORMACIÓN SOBRE PRECIOS DEL SOAT**
 
 El precio del SOAT (Seguro Obligatorio de Accidentes de Tránsito) varía según el tipo de vehículo y su uso. Para generar una cotización personalizada y precisa, necesito la siguiente información:
 
@@ -488,14 +1440,7 @@ El precio del SOAT (Seguro Obligatorio de Accidentes de Tránsito) varía según
 Una vez que tengas esta información completa, podremos generar una cotización personalizada del SOAT con los mejores precios disponibles.
 
 ¿Te gustaría proporcionarme estos datos para proceder con tu cotización SOAT?`;
-            }
-        }
-        catch (error) {
-            console.error('❌ Error obteniendo categorías:', error);
-            return "Lo siento, ocurrió un error al obtener las categorías de vehículos. Por favor intenta nuevamente.";
-        }
-    }
-    // PASO 2: Si es consulta sobre multas/sanciones, buscar en base de datos
+    } // PASO 2: Si es consulta sobre multas/sanciones, buscar en base de datos
     if (isFineQuery) {
         console.log('⚖️ [MULTA/SANCIÓN DETECTADA] Buscando información real en base de datos de SOAT');
         try {
@@ -567,277 +1512,4 @@ Una vez que tengas esta información completa, podremos generar una cotización 
         console.error('❌ Error al buscar en Supabase para SOAT:', errorMessage);
         return "Lo siento, ocurrió un error al buscar en los documentos de SOAT. Por favor intenta nuevamente.";
     }
-}
-/**
- * Función de prueba para verificar conexión con tabla soat_prices_2025
- * @returns Información sobre la conexión y estructura de la tabla
- */
-export async function testSoatPricesConnection() {
-    console.log('🔍 [SOAT PRICES] Probando conexión con tabla soat_prices_2025...');
-    try {
-        const supabase = createSupabaseClient();
-        // Test básico de conexión
-        const { data: testData, error: testError } = await supabase
-            .from('soat_prices_2025')
-            .select('*')
-            .limit(3);
-        if (testError) {
-            console.error('❌ Error conectando a soat_prices_2025:', testError);
-            return `❌ Error de conexión: ${testError.message}`;
-        }
-        console.log('✅ CONEXIÓN EXITOSA a soat_prices_2025');
-        console.log(`📊 Registros obtenidos: ${testData?.length || 0}`);
-        if (testData && testData.length > 0) {
-            // Obtener estructura de columnas
-            const columns = Object.keys(testData[0]);
-            console.log('📋 Columnas disponibles:', columns);
-            let response = `✅ **CONEXIÓN EXITOSA A TABLA soat_prices_2025**\n\n`;
-            response += `📊 **Registros encontrados:** ${testData.length}\n\n`;
-            response += `📋 **Columnas disponibles:**\n`;
-            columns.forEach(col => {
-                response += `• ${col}\n`;
-            });
-            response += `\n📄 **Ejemplo de datos:**\n`;
-            testData.forEach((record, index) => {
-                response += `\n**Registro ${index + 1}:**\n`;
-                Object.entries(record).forEach(([key, value]) => {
-                    response += `- ${key}: ${value}\n`;
-                });
-            });
-            return response;
-        }
-        else {
-            return "⚠️ Conexión exitosa pero la tabla no contiene datos";
-        }
-    }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ Error general en testSoatPricesConnection:', errorMessage);
-        return `❌ Error: ${errorMessage}`;
-    }
-}
-/**
- * Obtiene todas las categorías disponibles de vehículos en la tabla soat_prices_2025
- * @returns Array de categorías únicas disponibles
- */
-export async function getSoatCategories() {
-    console.log('📋 [SOAT PRICES] Obteniendo categorías disponibles...');
-    try {
-        const supabase = createSupabaseClient();
-        const { data: categoriesData, error } = await supabase
-            .from('soat_prices_2025')
-            .select('categoria')
-            .not('categoria', 'is', null);
-        if (error) {
-            console.error('❌ Error obteniendo categorías:', error);
-            return [];
-        }
-        if (categoriesData && categoriesData.length > 0) {
-            // Extraer categorías únicas
-            const uniqueCategories = [...new Set(categoriesData.map(item => item.categoria))];
-            console.log('✅ Categorías encontradas:', uniqueCategories);
-            return uniqueCategories;
-        }
-        return [];
-    }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ Error general en getSoatCategories:', errorMessage);
-        return [];
-    }
-}
-/**
- * Obtiene todos los subtipos disponibles para una categoría específica en la tabla soat_prices_2025
- * @param categoria - La categoría del vehículo (ej: MOTOS, AUTOS)
- * @returns Array de subtipos únicos para esa categoría (solo si existen)
- */
-export async function getSoatSubtypesByCategory(categoria) {
-    console.log(`🔍 [SOAT PRICES] Obteniendo subtipos para categoría: ${categoria}`);
-    try {
-        const supabase = createSupabaseClient();
-        const { data: subtypesData, error } = await supabase
-            .from('soat_prices_2025')
-            .select('subtipo')
-            .eq('categoria', categoria)
-            .not('subtipo', 'is', null)
-            .neq('subtipo', '');
-        if (error) {
-            console.error('❌ Error obteniendo subtipos:', error);
-            return [];
-        }
-        if (subtypesData && subtypesData.length > 0) {
-            // Extraer subtipos únicos que no sean null o vacíos
-            const uniqueSubtypes = [...new Set(subtypesData
-                    .map(item => item.subtipo)
-                    .filter(subtipo => subtipo && subtipo.trim() !== ''))];
-            console.log(`✅ Subtipos encontrados para ${categoria}:`, uniqueSubtypes);
-            return uniqueSubtypes;
-        }
-        console.log(`ℹ️ No se encontraron subtipos para la categoría: ${categoria}`);
-        return [];
-    }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ Error general en getSoatSubtypesByCategory:', errorMessage);
-        return [];
-    }
-}
-/**
- * Obtiene el precio exacto del SOAT basado en categoría y subtipo (si aplica)
- * @param categoria - La categoría del vehículo
- * @param subtipo - El subtipo del vehículo (opcional)
- * @returns Información completa del precio SOAT
- */
-export async function getSoatPriceByCategory(categoria, subtipo) {
-    console.log(`💰 [SOAT PRICES] Obteniendo precio para categoría: ${categoria}, subtipo: ${subtipo || 'N/A'}`);
-    try {
-        const supabase = createSupabaseClient();
-        let query = supabase
-            .from('soat_prices_2025')
-            .select('*')
-            .eq('categoria', categoria);
-        // Si se proporciona subtipo, agregarlo a la consulta
-        if (subtipo) {
-            query = query.eq('subtipo', subtipo);
-        }
-        const { data: priceData, error } = await query;
-        if (error) {
-            console.error('❌ Error obteniendo precio SOAT:', error);
-            return "❌ Error al consultar los precios del SOAT. Por favor intenta nuevamente.";
-        }
-        if (!priceData || priceData.length === 0) {
-            return "❌ No se encontraron precios para la categoría y subtipo especificados.";
-        }
-        // Formatear respuesta con los precios encontrados
-        let response = `💰 **PRECIOS SOAT 2025**\n\n`;
-        response += `📋 **Categoría:** ${categoria.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase())}\n`;
-        if (subtipo) {
-            response += `🔸 **Subtipo:** ${subtipo}\n`;
-        }
-        response += `\n📊 **PRECIOS DISPONIBLES:**\n\n`;
-        priceData.forEach((record, index) => {
-            response += `**${index + 1}. `;
-            if (record.subtipo) {
-                response += `${record.subtipo}`;
-            }
-            else {
-                response += record.categoria.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
-            }
-            if (record.cilindrada_cc) {
-                response += ` (${record.cilindrada_cc})`;
-            }
-            response += `:**\n`;
-            response += `💵 **Precio Total:** $${record.total_a_pagar?.toLocaleString() || 'N/A'}\n`;
-            if (record.tarifa_maxima && record.tarifa_maxima !== record.total_a_pagar) {
-                response += `📋 Tarifa Máxima: $${record.tarifa_maxima.toLocaleString()}\n`;
-            }
-            response += `\n`;
-        });
-        response += `✅ **Estos son los precios oficiales del SOAT para 2025**\n\n`;
-        response += `🎯 **¿Te gustaría proceder con la compra de tu SOAT?**\n`;
-        response += `📞 Puedo ayudarte con el proceso de adquisición paso a paso.`;
-        return response;
-    }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ Error general en getSoatPriceByCategory:', errorMessage);
-        return "❌ Error al consultar los precios del SOAT. Por favor intenta nuevamente.";
-    }
-}
-/**
- * Detecta si el usuario está seleccionando una categoría y maneja la lógica de precios
- * @param query - La consulta del usuario
- * @returns Información de precio o solicitud de subtipo si es necesario
- */
-export async function handleCategorySelection(query) {
-    console.log(`🔍 [SOAT] Analizando posible selección de categoría: "${query}"`);
-    // Obtener todas las categorías disponibles
-    const categories = await getSoatCategories();
-    // Detectar selección por número
-    const numberMatch = query.match(/^\s*(\d+)\s*$/);
-    if (numberMatch) {
-        const categoryIndex = parseInt(numberMatch[1]) - 1;
-        if (categoryIndex >= 0 && categoryIndex < categories.length) {
-            const selectedCategory = categories[categoryIndex];
-            console.log(`✅ Categoría seleccionada por número: ${selectedCategory}`);
-            return await processCategorySelection(selectedCategory);
-        }
-    }
-    // Detectar selección por nombre (parcial o completo)
-    const queryLower = query.toLowerCase();
-    const matchedCategory = categories.find(category => {
-        const categoryFriendly = category.replace(/_/g, ' ').toLowerCase();
-        return queryLower.includes(categoryFriendly) ||
-            categoryFriendly.includes(queryLower) ||
-            queryLower === category.toLowerCase();
-    });
-    if (matchedCategory) {
-        console.log(`✅ Categoría seleccionada por nombre: ${matchedCategory}`);
-        return await processCategorySelection(matchedCategory);
-    }
-    // No se detectó selección de categoría
-    return null;
-}
-/**
- * Procesa la selección de una categoría específica
- * @param categoria - La categoría seleccionada
- * @returns Respuesta con precios o solicitud de subtipo
- */
-async function processCategorySelection(categoria) {
-    console.log(`⚙️ [SOAT] Procesando selección de categoría: ${categoria}`);
-    // Verificar si esta categoría tiene subtipos
-    const subtypes = await getSoatSubtypesByCategory(categoria);
-    if (subtypes.length > 0) {
-        // Esta categoría tiene subtipos, solicitar al usuario que seleccione uno
-        let response = `🔸 **SUBTIPOS DISPONIBLES PARA ${categoria.replace(/_/g, ' ').toUpperCase()}**\n\n`;
-        response += `Tu categoría de vehículo tiene varios subtipos con precios diferentes.\n\n`;
-        response += `📋 **Selecciona el subtipo específico:**\n\n`;
-        subtypes.forEach((subtype, index) => {
-            response += `${index + 1}. **${subtype}**\n`;
-        });
-        response += `\n💬 **Responde con el número o nombre del subtipo** (ej: "1" o "${subtypes[0]}")\n\n`;
-        response += `ℹ️ Una vez selecciones el subtipo, te mostraré el precio exacto.`;
-        return response;
-    }
-    else {
-        // Esta categoría no tiene subtipos, mostrar precio directamente
-        return await getSoatPriceByCategory(categoria);
-    }
-}
-/**
- * Detecta si el usuario está seleccionando un subtipo y obtiene el precio
- * @param query - La consulta del usuario
- * @param categoria - La categoría previamente seleccionada (debe manejarse en el contexto)
- * @returns Precio específico del subtipo seleccionado
- */
-export async function handleSubtypeSelection(query, categoria) {
-    console.log(`🔍 [SOAT] Analizando posible selección de subtipo para ${categoria}: "${query}"`);
-    // Obtener subtipos de la categoría
-    const subtypes = await getSoatSubtypesByCategory(categoria);
-    if (subtypes.length === 0) {
-        return null; // No hay subtipos para esta categoría
-    }
-    // Detectar selección por número
-    const numberMatch = query.match(/^\s*(\d+)\s*$/);
-    if (numberMatch) {
-        const subtypeIndex = parseInt(numberMatch[1]) - 1;
-        if (subtypeIndex >= 0 && subtypeIndex < subtypes.length) {
-            const selectedSubtype = subtypes[subtypeIndex];
-            console.log(`✅ Subtipo seleccionado por número: ${selectedSubtype}`);
-            return await getSoatPriceByCategory(categoria, selectedSubtype);
-        }
-    }
-    // Detectar selección por nombre (parcial o completo)
-    const queryLower = query.toLowerCase();
-    const matchedSubtype = subtypes.find(subtype => {
-        const subtypeLower = subtype.toLowerCase();
-        return queryLower.includes(subtypeLower) ||
-            subtypeLower.includes(queryLower);
-    });
-    if (matchedSubtype) {
-        console.log(`✅ Subtipo seleccionado por nombre: ${matchedSubtype}`);
-        return await getSoatPriceByCategory(categoria, matchedSubtype);
-    }
-    // No se detectó selección de subtipo
-    return null;
 }

@@ -2,13 +2,17 @@ import dotenv from "dotenv";
 import { HumanMessage } from "@langchain/core/messages";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
-import { consultBienestarSpecialistTool } from "../tools/tools.js";
+import { consultBienestarSpecialistTool, registerDentixClientTool, sendPaymentLinkEmailTool } from "../tools/tools.js";
 import { llm } from "../config/llm.js";
 import { MESSAGES } from '../config/constants.js';
 dotenv.config();
 export const bienestarServiceAgent = createReactAgent({
     llm,
-    tools: [consultBienestarSpecialistTool],
+    tools: [
+        consultBienestarSpecialistTool,
+        registerDentixClientTool,
+        sendPaymentLinkEmailTool
+    ],
     stateModifier: new SystemMessage(MESSAGES.SYSTEM_BIENESTAR_PLUS_PROMPT)
 });
 export const bienestarServiceNode = async (state, config) => {

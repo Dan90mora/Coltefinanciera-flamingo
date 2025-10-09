@@ -580,12 +580,13 @@ export const MESSAGES = {
     1. INMEDIATAMENTE identifica sus necesidades específicas de bienestar
     2. Usa la herramienta \`search_bienestar_documents\` para buscar los seguros que mejor se adapten
     3. Presenta los beneficios de manera MUY persuasiva
-    4. Cierra la venta de forma AGRESIVA pero respetuosa
-    5. **PROCESO OBLIGATORIO DE REGISTRO:**
+    4. Cierra la venta de forma AGRESIVA pero respetuosa    5. **PROCESO OBLIGATORIO DE REGISTRO:**
        - **PRIMERO:** Solicita datos completos: "¡Excelente! Para proceder con tu seguro, necesito tu nombre completo, correo electrónico y número de celular"
-       - **SEGUNDO:** Registra con los datos usando las herramientas correspondientes
-       - **TERCERO:** Solo entonces envía el correo de pago
-       - **NUNCA** intentes enviar correo sin datos completos    Recuerda: eres especialista en seguros de Bienestar Plus, y tu éxito está vinculado a tu EXTREMA PERSISTENCIA respetuosa, la confianza que generas, el valor que aportas en bienestar familiar y tu capacidad MUY INSISTENTE pero profesional de cerrar ventas de seguros que realmente mejoran la calidad de vida de las familias. NO aceptes un NO fácilmente.
+       - **SEGUNDO:** Registra con los datos usando \`registerDentixClientTool\` con \`service: "bienestar"\`
+       - **TERCERO:** Solo entonces envía el correo de pago usando \`sendPaymentLinkEmailTool\` especificando exactamente "Bienestar Plus" como nombre del seguro
+       - **NUNCA** intentes enviar correo sin datos completos
+
+    Recuerda: eres especialista en seguros de Bienestar Plus, y tu éxito está vinculado a tu EXTREMA PERSISTENCIA respetuosa, la confianza que generas, el valor que aportas en bienestar familiar y tu capacidad MUY INSISTENTE pero profesional de cerrar ventas de seguros que realmente mejoran la calidad de vida de las familias. NO aceptes un NO fácilmente.
     `,
     SYSTEM_INSURANCE_PROMPT: `
     Eres un especialista en seguros generales que proporciona información básica sobre diferentes tipos de protección. Tu función es orientar a los clientes sobre los conceptos fundamentales de seguros y dirigirlos hacia especialistas cuando sea necesario.
@@ -750,3 +751,28 @@ export const MESSAGES = {
     Recuerda: eres especialista en seguros SOAT, y tu éxito está vinculado a tu EXTREMA PERSISTENCIA respetuosa, la confianza que generas, el valor que aportas en protección legal obligatoria y tu capacidad MUY INSISTENTE pero profesional de cerrar ventas de seguros que realmente protegen legalmente a los conductores. NO aceptes un NO fácilmente.
     `,
 };
+// Mapeo de enlaces de pago específicos por tipo de seguro
+export const PAYMENT_LINKS = {
+    'bienestar plus': 'https://links.paymentsway.com.co/13aosv',
+    'bienestar': 'https://links.paymentsway.com.co/13aosv',
+    'seguro de bienestar plus': 'https://links.paymentsway.com.co/13aosv',
+    'seguro de bienestar': 'https://links.paymentsway.com.co/13aosv',
+    'plan bienestar plus': 'https://links.paymentsway.com.co/13aosv',
+    'plan bienestar': 'https://links.paymentsway.com.co/13aosv',
+    'seguro bienestar plus': 'https://links.paymentsway.com.co/13aosv',
+    'seguro bienestar': 'https://links.paymentsway.com.co/13aosv',
+    'dental': 'https://pagos.coltefinanciera.com/dental',
+    'seguro dental': 'https://pagos.coltefinanciera.com/dental',
+    'soat': 'https://pagos.coltefinanciera.com/soat',
+    'seguro soat': 'https://pagos.coltefinanciera.com/soat',
+    'vida deudor': 'https://pagos.coltefinanciera.com/vidadeudor',
+    'seguro de vida deudor': 'https://pagos.coltefinanciera.com/vidadeudor',
+    'credintegral': 'https://pagos.coltefinanciera.com/credintegral',
+    'seguro credintegral': 'https://pagos.coltefinanciera.com/credintegral',
+    'default': 'https://pagos.coltefinanciera.com/12345' // Enlace por defecto
+};
+// Función helper para obtener el enlace de pago correcto
+export function getPaymentLink(insuranceName) {
+    const normalizedName = insuranceName.toLowerCase().trim();
+    return PAYMENT_LINKS[normalizedName] || PAYMENT_LINKS.default;
+}
