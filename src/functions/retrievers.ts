@@ -787,3 +787,110 @@ async function fallbackTextSearchSoat(query: string): Promise<any[]> {
         return [];
     }
 }
+
+/**
+ * Busca en la base vectorial de Mascota usando embeddings de OpenAI
+ * @param query - La consulta del usuario
+ * @returns Array de resultados de la búsqueda vectorial
+ */
+export const searchMascotaVectors = async (query: string): Promise<any[]> => {
+    const embeddings = createEmbeddings();
+    const supabase = createSupabaseClient();
+    console.log(`🐾 [MASCOTA] Procesando consulta: "${query}"`);
+
+    try {
+        // Generar embedding para la consulta
+        const queryEmbedding = await embeddings.embedQuery(query);
+        console.log("[DEBUG] Embedding generado para la consulta de mascotas.");
+        
+        // Detectar si la consulta es sobre cobertura, precios o servicios específicos
+        const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara|veterinario|consulta|tratamiento|urgencia|cirugía/i.test(query);
+        const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|propuesta económica|económica|tarifa|valor|cotización|plan|mensual|anual/i.test(query);
+        const isVeterinaryQuery = /veterinario|veterinaria|clínica|consulta|urgencia|emergencia|examen|vacuna|desparasitación|cirugía|castración|esterilización/i.test(query);
+        
+        // Preparar múltiples consultas para búsqueda exhaustiva
+        let searchQueries = [query];
+        
+        if (isVeterinaryQuery) {
+            console.log("[DEBUG] 🏥 Consulta veterinaria detectada, agregando términos específicos...");
+            searchQueries.push("servicios veterinarios");
+            searchQueries.push("consulta veterinaria");
+            searchQueries.push("atención veterinaria");
+            searchQueries.push("urgencias veterinarias");
+            searchQueries.push("clínica veterinaria");
+            searchQueries.push("exámenes veterinarios");
+        } else if (isCoverageQuery) {
+            searchQueries.push("cobertura mascota");
+            searchQueries.push("servicios incluidos mascotas");
+            searchQueries.push("beneficios seguro mascota");
+            searchQueries.push("qué cubre mascota");
+            searchQueries.push("protección animal");
+        } else if (isPriceQuery) {
+            searchQueries.push("propuesta económica mascota");
+            searchQueries.push("precio seguro mascota");
+            searchQueries.push("costo seguro mascota");
+            searchQueries.push("valor seguro mascota");
+            searchQueries.push("tarifa mascota");
+            searchQueries.push("plan mascota");
+        }
+
+        // Siempre agregar términos base
+        searchQueries.push("seguro mascota");
+        searchQueries.push("mascota");
+        searchQueries.push("animal");
+        searchQueries.push("pet");
+
+        // Realizar búsquedas y recopilar resultados únicos
+        const allResults: any[] = [];
+        const seenIds = new Set<number>();
+
+        for (const searchQuery of searchQueries) {
+            const searchEmbedding = searchQuery === query ? queryEmbedding : await embeddings.embedQuery(searchQuery);
+            
+            // Buscar documentos similares en mascota_documents
+            const { data, error } = await supabase.rpc('match_mascota_documents', {
+                query_embedding: searchEmbedding,
+                match_threshold: 0.2, // Umbral permisivo para capturar más resultados
+                match_count: 5,
+            });
+
+            if (error) {
+                console.error(`[DEBUG] ❌ Error en búsqueda vectorial de mascotas con "${searchQuery}":`, error.message);
+                continue;
+            }
+
+            if (data && data.length > 0) {
+                console.log(`[DEBUG] ✅ Encontrados ${data.length} resultados para "${searchQuery}"`);
+                
+                // Agregar resultados únicos
+                data.forEach((result: any) => {
+                    if (!seenIds.has(result.id)) {
+                        seenIds.add(result.id);
+                        allResults.push({
+                            ...result,
+                            search_query: searchQuery // Para debugging
+                        });
+                    }
+                });
+            }
+        }
+
+        if (allResults.length === 0) {
+            console.log('[DEBUG] ⚠️ No se encontraron resultados en la búsqueda de mascotas.');
+            return [];
+        }
+
+        // Ordenar por similarity score (descendente)
+        allResults.sort((a, b) => (b.similarity || 0) - (a.similarity || 0));
+        
+        console.log(`[DEBUG] 📄 Total de resultados únicos encontrados para mascotas: ${allResults.length}`);
+        
+        // Retornar los mejores resultados (máximo 5)
+        return allResults.slice(0, 5);
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[DEBUG] ❌ Error en searchMascotaVectors: ${errorMessage}`);
+        throw error;
+    }
+};
