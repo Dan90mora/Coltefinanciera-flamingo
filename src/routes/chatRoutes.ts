@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { saveChatHistory } from "../utils/saveHistoryDb.js";
 import { getAvailableChatOn } from "../utils/getAvailableChatOn.js";
 import { getAvailableForAudio } from "../utils/getAvailableForAudio.js";
+import { isFirstGreetingOfDay, isClientRequestingAudio } from "../utils/audioControlUtils.js";
 import { graph } from "../supervisor.js";
 import fs from 'fs';
 import ffmpeg from 'fluent-ffmpeg';
@@ -284,6 +285,15 @@ router.post("/seguros/whatsapp", async (req, res) => {
       //consultar si esta disponible para audios
       const isAvailableForAudio = await getAvailableForAudio(fromNumber);
 
+      // 🆕 NUEVA LÓGICA: Detectar primer saludo del día y solicitudes de audio
+      const isFirstGreeting = await isFirstGreetingOfDay(fromNumber);
+      const clientRequestedAudio = isClientRequestingAudio(incomingMessage || '');
+      
+      console.log("🎯 NUEVA LÓGICA DE AUDIO:");
+      console.log("   🌅 ¿Es primer saludo del día?:", isFirstGreeting);
+      console.log("   🎤 ¿Cliente solicitó audio?:", clientRequestedAudio);
+      console.log("   📥 Mensaje del cliente:", incomingMessage?.substring(0, 100) + '...');
+
       // 🔍 LOGGING DIAGNÓSTICO DETALLADO
       console.log("===== DIAGNÓSTICO AUDIO SYSTEM =====");
       console.log("📞 Número cliente:", fromNumber);
@@ -295,33 +305,42 @@ router.post("/seguros/whatsapp", async (req, res) => {
       console.log("🔗 Contiene URL:", /https?:\/\/[^\s]+|www\.[^\s]+/i.test(responseMessage));
       console.log("📧 Contiene email:", /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(responseMessage));
       console.log("🎙️ Cliente disponible para audio (DB):", isAvailableForAudio);
+      // 🆕 NUEVA LÓGICA DE DECISIÓN DE AUDIO
+      // Restricciones que siempre bloquean audio (mantener funcionamiento existente)
+      const hasNumbers = /\d/.test(responseMessage);
+      const hasSiglas = /\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage);
+      const mentionsAudio = responseMessage.toLowerCase().includes("audio");
+      const hasUrls = /https?:\/\/[^\s]+|www\.[^\s]+/i.test(responseMessage);
+      const hasEmails = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(responseMessage);
+      const exceedsLimit = responseMessage.length > 400;
+      
+      // Las restricciones existentes siempre prevalecen
+      const hasBlockingRestrictions = hasNumbers || hasSiglas || mentionsAudio || hasUrls || hasEmails || exceedsLimit;
+      
+      // Nueva lógica: enviar audio si es primer saludo O si cliente lo solicitó (y no hay restricciones)
+      const shouldSendAudio = isAvailableForAudio && !hasBlockingRestrictions && (isFirstGreeting || clientRequestedAudio);
+
       console.log(
-        "✅ ¿Pasará a audio?:",
-        responseMessage.length <= 400 &&
-          !/\d/.test(responseMessage) &&
-          !/\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage) &&
-          !responseMessage.toLowerCase().includes("audio") &&
-          !/https?:\/\/[^\s]+|www\.[^\s]+/i.test(responseMessage) &&
-          !/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(
-            responseMessage
-          ) &&
-          isAvailableForAudio
+        "✅ ¿Pasará a audio? (NUEVA LÓGICA):",
+        shouldSendAudio
       );
+      console.log("   🚫 Restricciones bloqueantes:", hasBlockingRestrictions);
+      console.log("     - Números:", hasNumbers);
+      console.log("     - Siglas:", hasSiglas);
+      console.log("     - Menciona 'audio':", mentionsAudio);
+      console.log("     - URLs:", hasUrls);
+      console.log("     - Emails:", hasEmails);
+      console.log("     - Excede 400 chars:", exceedsLimit);
+      console.log("   ✅ Condiciones para audio:");
+      console.log("     - Cliente disponible:", isAvailableForAudio);
+      console.log("     - Es primer saludo:", isFirstGreeting);
+      console.log("     - Cliente solicitó audio:", clientRequestedAudio);
       console.log('=====================================');
 
-      // Si la respuesta es menor a 400 caracteres && no contiene números && no menciona "audio", hacer TTS y enviar el audio
-      if (
-        responseMessage.length <= 400 && // Menor a 400 caracteres
-        !/\d/.test(responseMessage) && // No contiene números
-        !/\b(?:[A-Z]{2,}|\b(?:[A-Z]\.){2,}[A-Z]?)\b/.test(responseMessage) && // No contiene siglas
-        !responseMessage.toLowerCase().includes("audio") && // 🚫 No menciona "audio"
-        !/https?:\/\/[^\s]+|www\.[^\s]+/i.test(responseMessage) && // 🚫 NUEVA CONDICIÓN: No contiene URLs
-        !/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(
-          responseMessage
-        ) && // 🚫 NUEVA CONDICIÓN: No contiene emails
-        isAvailableForAudio // El cliente puede recibir audios
-      ) {
-        console.log("Entró a enviar audio");
+      // Si debe enviar audio según la nueva lógica
+      if (shouldSendAudio) {
+        const audioReason = isFirstGreeting ? "PRIMER SALUDO DEL DÍA" : "SOLICITUD DEL CLIENTE";
+        console.log(`🎵 Enviando audio por: ${audioReason}`);
         try {
           const audioBuffer = await createAudioStreamFromText(responseMessage);
           const audioName = `${uuidv4()}.wav`;
@@ -409,6 +428,18 @@ router.post("/seguros/whatsapp", async (req, res) => {
           res.end(twiml.toString());
         }
       } else {
+        // 📝 ENVIAR TEXTO: Explicar por qué no se envía audio
+        console.log("📝 ENVIANDO TEXTO - Razones:");
+        if (!isAvailableForAudio) {
+          console.log("   ❌ Cliente no disponible para audio");
+        }
+        if (hasBlockingRestrictions) {
+          console.log("   ❌ Tiene restricciones bloqueantes");
+        }
+        if (!isFirstGreeting && !clientRequestedAudio) {
+          console.log("   ❌ No es primer saludo Y cliente no solicitó audio");
+        }
+        
         // Responder con el texto si es mayor de 400 caracteres
         if (responseMessage.length > 1000) {
           console.log("Response is too long, splitting by newline");

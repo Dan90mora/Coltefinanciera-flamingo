@@ -14,6 +14,20 @@ export interface VehicleInsuranceData {
   vehicleCity: string | null;
 }
 
+// Tipo para datos de seguro de mascotas
+export interface MascotaInsuranceData {
+  fullName: string | null;
+  cedula: string | null;
+  birthDate: string | null;
+  phone: string | null;
+  petName: string | null;
+  petType: string | null; // perro, gato, etc.
+  petBreed: string | null;
+  petAge: string | null;
+  petWeight: string | null;
+  city: string | null;
+}
+
 export const AgentState = Annotation.Root({
     messages: Annotation<BaseMessage[]>({
       reducer: (x, y) => x.concat(y),
@@ -28,6 +42,10 @@ export const AgentState = Annotation.Root({
       default: () => END,
     }),
     vehicleInsuranceData: Annotation<VehicleInsuranceData | null>({
+      reducer: (x, y) => y ?? x ?? null,
+      default: () => null,
+    }),
+    mascotaInsuranceData: Annotation<MascotaInsuranceData | null>({
       reducer: (x, y) => y ?? x ?? null,
       default: () => null,
     }),

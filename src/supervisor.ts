@@ -10,6 +10,11 @@ import { credintegralServiceNode } from "./agents/credintegralServiceAgent.js";
 import { vidaDeudorServiceNode } from "./agents/vidaDeudorAgent.js";
 import { insuranceServiceNode } from "./agents/insuranceServiceAgent.js";
 import { luciaServiceNode } from "./agents/luciaServiceAgent.js";
+// Agentes especializados adicionales disponibles (no usados en flujo actual simplificado):
+// import { mascotaServiceNode } from "./agents/mascotaServiceAgent.js";
+// import { bienestarServiceNode } from "./agents/bienestarServiceAgent.js";  
+// import { soatServiceNode } from "./agents/soatServiceAgent.js";
+// import { vehicleServiceNode } from "./agents/vehicleServiceAgent.js";
 import { llm } from "./config/llm.js";
 
 dotenv.config();
