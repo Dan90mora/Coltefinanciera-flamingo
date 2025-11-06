@@ -233,11 +233,11 @@ router.post("/seguros/whatsapp", async (req, res) => {
             await saveChatHistory(fromNumber, responseMessage, false, '');
             //consultar si esta disponible para audios
             const isAvailableForAudio = await getAvailableForAudio(fromNumber);
-            // 🆕 NUEVA LÓGICA: Detectar primer saludo del día y solicitudes de audio
+            // 🆕 NUEVA LÓGICA: Detectar primer saludo (primera vez o +24h) y solicitudes de audio
             const isFirstGreeting = await isFirstGreetingOfDay(fromNumber);
             const clientRequestedAudio = isClientRequestingAudio(incomingMessage || '');
             console.log("🎯 NUEVA LÓGICA DE AUDIO:");
-            console.log("   🌅 ¿Es primer saludo del día?:", isFirstGreeting);
+            console.log("   🌅 ¿Es primer saludo (primera vez o +24h)?:", isFirstGreeting);
             console.log("   🎤 ¿Cliente solicitó audio?:", clientRequestedAudio);
             console.log("   📥 Mensaje del cliente:", incomingMessage?.substring(0, 100) + '...');
             // 🔍 LOGGING DIAGNÓSTICO DETALLADO
@@ -273,12 +273,12 @@ router.post("/seguros/whatsapp", async (req, res) => {
             console.log("     - Excede 400 chars:", exceedsLimit);
             console.log("   ✅ Condiciones para audio:");
             console.log("     - Cliente disponible:", isAvailableForAudio);
-            console.log("     - Es primer saludo:", isFirstGreeting);
+            console.log("     - Es primer saludo (primera vez o +24h):", isFirstGreeting);
             console.log("     - Cliente solicitó audio:", clientRequestedAudio);
             console.log('=====================================');
             // Si debe enviar audio según la nueva lógica
             if (shouldSendAudio) {
-                const audioReason = isFirstGreeting ? "PRIMER SALUDO DEL DÍA" : "SOLICITUD DEL CLIENTE";
+                const audioReason = isFirstGreeting ? "PRIMER SALUDO (primera vez o +24h)" : "SOLICITUD DEL CLIENTE";
                 console.log(`🎵 Enviando audio por: ${audioReason}`);
                 try {
                     const audioBuffer = await createAudioStreamFromText(responseMessage);

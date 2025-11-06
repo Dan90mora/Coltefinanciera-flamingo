@@ -7,13 +7,13 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 export const supabase = createClient(supabaseUrl, supabaseKey);
 /**
- * Detecta si es el primer saludo del día/sesión para un cliente
+ * Detecta si es el primer saludo (primera vez o después de 24+ horas) para un cliente
  * @param clientNumber - Número del cliente
- * @returns true si es el primer saludo del día, false en caso contrario
+ * @returns true si es primer saludo o han pasado más de 24 horas desde el último mensaje del agente
  */
 export async function isFirstGreetingOfDay(clientNumber) {
     try {
-        console.log('🔍 Verificando si es primer saludo del día para:', clientNumber);
+        console.log('🔍 Verificando si es primer saludo (primera vez o +24h) para:', clientNumber);
         // Obtener historial del cliente
         const { data: existingChat, error: fetchError } = await supabase
             .from('chat_history')
@@ -24,25 +24,37 @@ export async function isFirstGreetingOfDay(clientNumber) {
             console.error('❌ Error consultando historial:', fetchError.message);
             return true; // En caso de error, asumir que es primer saludo
         }
+        // ESCENARIO 1: Primera vez que escribe (no hay historial)
         if (!existingChat || !existingChat.messages || existingChat.messages.length === 0) {
-            console.log('🆕 Cliente nuevo o sin historial - ES PRIMER SALUDO');
+            console.log('🆕 ESCENARIO 1: Cliente nuevo o sin historial - ES PRIMER SALUDO');
             return true;
         }
-        // Obtener la fecha actual
-        const today = new Date();
-        const todayDateString = today.toISOString().split('T')[0]; // YYYY-MM-DD
-        // Buscar si ya hay mensajes del agente hoy
-        const todayAgentMessages = existingChat.messages.filter((message) => {
-            if (message.user !== 'agent_message')
-                return false;
-            const messageDate = new Date(message.date);
-            const messageDateString = messageDate.toISOString().split('T')[0];
-            return messageDateString === todayDateString;
-        });
-        const isFirstToday = todayAgentMessages.length === 0;
-        console.log(`📅 Mensajes del agente hoy (${todayDateString}):`, todayAgentMessages.length);
-        console.log('🎯 ¿Es primer saludo del día?:', isFirstToday);
-        return isFirstToday;
+        // Buscar el último mensaje del AGENTE (no del cliente)
+        const agentMessages = existingChat.messages.filter((message) => message.user === 'agent_message');
+        if (agentMessages.length === 0) {
+            console.log('🆕 ESCENARIO 1: No hay mensajes previos del agente - ES PRIMER SALUDO');
+            return true;
+        }
+        // Obtener el último mensaje del agente (ordenar por fecha descendente)
+        const lastAgentMessage = agentMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+        // ESCENARIO 2: Verificar si han pasado más de 24 horas + 1 minuto
+        const now = new Date();
+        const lastMessageDate = new Date(lastAgentMessage.date);
+        const timeDifferenceMs = now.getTime() - lastMessageDate.getTime();
+        const hoursElapsed = timeDifferenceMs / (1000 * 60 * 60); // Convertir a horas
+        const twentyFourHoursAndOneMinute = 24 + (1 / 60); // 24 horas y 1 minuto
+        const isAfter24Hours = hoursElapsed > twentyFourHoursAndOneMinute;
+        console.log(`📅 Último mensaje del agente: ${lastAgentMessage.date}`);
+        console.log(`⏰ Tiempo transcurrido: ${hoursElapsed.toFixed(2)} horas`);
+        console.log(`🕐 ¿Más de 24h 1min? (${twentyFourHoursAndOneMinute.toFixed(2)}h):`, isAfter24Hours);
+        if (isAfter24Hours) {
+            console.log('🆕 ESCENARIO 2: Han pasado más de 24 horas - ES PRIMER SALUDO');
+            return true;
+        }
+        else {
+            console.log('❌ No es primer saludo: Último mensaje hace menos de 24 horas');
+            return false;
+        }
     }
     catch (error) {
         console.error('❌ Error en isFirstGreetingOfDay:', error);
