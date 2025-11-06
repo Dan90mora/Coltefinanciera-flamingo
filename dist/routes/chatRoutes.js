@@ -234,7 +234,15 @@ router.post("/seguros/whatsapp", async (req, res) => {
             //consultar si esta disponible para audios
             const isAvailableForAudio = await getAvailableForAudio(fromNumber);
             // 🆕 NUEVA LÓGICA: Detectar primer saludo (primera vez o +24h) y solicitudes de audio
+            console.log("🔍 ========== INICIANDO DETECCIÓN DE PRIMER SALUDO ==========");
+            console.log("📞 Analizando para número:", fromNumber);
+            console.log("⏰ Timestamp actual:", new Date().toISOString());
+            console.log("🌍 Timezone servidor:", Intl.DateTimeFormat().resolvedOptions().timeZone);
+            console.log("📅 Fecha local servidor:", new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }));
             const isFirstGreeting = await isFirstGreetingOfDay(fromNumber);
+            console.log("🔍 ========== RESULTADO DETECCIÓN PRIMER SALUDO ==========");
+            console.log("🎯 isFirstGreeting resultado:", isFirstGreeting);
+            console.log("🔍 ========================================================");
             const clientRequestedAudio = isClientRequestingAudio(incomingMessage || '');
             console.log("🎯 NUEVA LÓGICA DE AUDIO:");
             console.log("   🌅 ¿Es primer saludo (primera vez o +24h)?:", isFirstGreeting);
