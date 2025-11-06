@@ -342,8 +342,8 @@ Una vez confirmados los datos, tu asistencia se activará inmediatamente con 3 m
 
 🎯 **Tu asistencia incluirá:**
 • Teleconsulta medicina general (2 eventos por año)
-• Telenutrición ilimitada
 • Telepsicología (2 eventos por año)
+• Telenutrición y asesoría nutricional (2 eventos por año)
 • Descuentos en farmacias
 
 ¿Estás listo para proceder con la activación?`;
@@ -364,7 +364,7 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
 
 🛡️ **MIENTRAS TANTO:**
 • Disfruta de tus 3 meses gratuitos
-• Usa todos los servicios incluidos sin restricciones
+• Usa todos los servicios incluidos: teleconsulta medicina general, telepsicología, telenutrición y descuentos en farmacias
 • No tienes que hacer ningún pago adicional por ahora
 
 ¿Te gustaría que te explique más sobre los servicios incluidos en tu asistencia?`;
@@ -488,6 +488,11 @@ export const confirmAndUpdateClientDataTool = tool(async ({ phoneNumber, updates
 });
 export const consultBienestarSpecialistTool = tool(async ({ customerQuery }) => {
     console.log(`🌟 Lucia consulta al especialista Bienestar Plus (SOLO Supabase): ${customerQuery}`);
+    // Detectar consultas sobre servicios específicos potencialmente no disponibles
+    const problematicServices = /telenutrición|nutrición|nutricional|asesoría nutricional|consulta nutricional|nutricionista|dietista/i;
+    if (problematicServices.test(customerQuery)) {
+        console.log('⚠️ [BIENESTAR] Consulta sobre servicio potencialmente no disponible detectada');
+    }
     // Unificar todas las palabras clave de precio/costo/valor/tarifa
     const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara|salud|médica|medicina|hospitalización|consultas|medicamentos|psicología/i.test(customerQuery);
     const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización/i.test(customerQuery);
@@ -509,12 +514,20 @@ export const consultBienestarSpecialistTool = tool(async ({ customerQuery }) => 
         console.log('[DEBUG] Resultados crudos de searchBienestarVectors:', JSON.stringify(vectorResults, null, 2));
         if (!vectorResults || vectorResults.length === 0) {
             console.log('[DEBUG] No se encontraron resultados vectoriales relevantes.');
+            // Mensaje específico para servicios problemáticos
+            if (problematicServices.test(customerQuery)) {
+                return 'Consultando nuestra documentación oficial de Bienestar Plus... No encontré información sobre servicios de telenutrición o asesoría nutricional en nuestra documentación oficial. Te puedo informar sobre los servicios de salud que SÍ están confirmados y disponibles en nuestro plan de Bienestar Plus. ¿Te gustaría conocer los servicios médicos verificados que incluye?';
+            }
             return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de Bienestar Plus. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro de bienestar familiar?';
         }
         const relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
         console.log('[DEBUG] Resultados relevantes (final_rank > 0.01):', JSON.stringify(relevantResults, null, 2));
         if (relevantResults.length === 0) {
             console.log('[DEBUG] Ningún resultado relevante tras el filtrado.');
+            // Mensaje específico para servicios problemáticos  
+            if (problematicServices.test(customerQuery)) {
+                return 'Consultando nuestra documentación oficial de Bienestar Plus... No encontré información sobre servicios de telenutrición o asesoría nutricional en nuestra documentación oficial. Te puedo informar sobre los servicios de salud que SÍ están confirmados y disponibles en nuestro plan de Bienestar Plus. ¿Te gustaría conocer los servicios médicos verificados que incluye?';
+            }
             return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de seguros de Bienestar Plus. Mi especialidad son los seguros de bienestar familiar, salud, medicina y protección integral. ¿Podrías preguntarme algo relacionado con seguros de bienestar familiar?';
         }
         // Extracción y formateo especial: buscar en TODOS los chunks
@@ -673,24 +686,26 @@ export const consultAutosSpecialistTool = tool(async ({ customerQuery }) => {
         customerQuery: z.string().describe("La consulta específica del cliente sobre seguros de autos que necesita respuesta especializada"),
     }),
 });
-// Herramienta específica para el agente vehicular (búsqueda directa)
-export const searchAutosDocumentsTool = tool(async ({ query }) => {
-    console.log(`🚗 [AGENTE VEHICULAR] Búsqueda directa en autos_documents: ${query}`);
+export const consultMascotaSpecialistTool = tool(async ({ customerQuery }) => {
+    console.log(`🐾 Lucia consulta al especialista Mascotas (tabla mascota_documents): ${customerQuery}`);
     try {
-        const { searchAutosDocuments } = await import('../functions/functions');
-        const searchResults = await searchAutosDocuments(query);
-        console.log(`✅ [AGENTE VEHICULAR] Resultados: ${searchResults.substring(0, 100)}...`);
+        const { searchMascotaDocuments } = await import('../functions/functions.js');
+        const searchResults = await searchMascotaDocuments(customerQuery);
+        if (!searchResults || searchResults.includes("Lo siento, no encontré")) {
+            return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de seguros para mascotas. Mi especialidad son los seguros para mascotas, coberturas veterinarias, protección animal y cuidado de animales de compañía. ¿Podrías preguntarme algo relacionado con seguros para tu mascota?';
+        }
+        console.log(`✅ Respuesta del especialista Mascotas: ${searchResults.substring(0, 100)}...`);
         return searchResults;
     }
     catch (error) {
-        console.error('❌ [AGENTE VEHICULAR] Error en búsqueda:', error);
-        return "Lo siento, ocurrió un error al buscar en los documentos de seguros de autos. Por favor intenta nuevamente.";
+        console.error('❌ Error consultando base de datos de seguros para mascotas:', error);
+        return 'Lo siento, no pude acceder a la base de datos de seguros para mascotas en este momento. Por favor intenta nuevamente o contacta a nuestro servicio al cliente.';
     }
 }, {
-    name: "search_autos_documents",
-    description: "Busca información específica en los documentos de seguros de autos almacenados en Supabase. Úsala cuando necesites información sobre coberturas, precios, beneficios, procedimientos o cualquier detalle específico de los seguros vehiculares.",
+    name: "consult_mascota_specialist",
+    description: "Consulta al especialista en seguros para mascotas usando la tabla mascota_documents de Supabase. Obtiene información específica sobre seguros veterinarios, coberturas para animales, beneficios y procedimientos. Úsala cuando el cliente pregunte sobre seguros para mascotas, protección veterinaria, seguros de animales o cuidado de mascotas.",
     schema: z.object({
-        query: z.string().describe("La consulta específica del usuario para buscar en los documentos de seguros de autos"),
+        customerQuery: z.string().describe("La consulta específica del cliente sobre seguros para mascotas que necesita respuesta especializada"),
     }),
 });
 export const consultSoatSpecialistTool = tool(async ({ customerQuery }) => {

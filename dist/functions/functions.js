@@ -260,8 +260,8 @@ La asistencia Vida Deudor tiene un costo de **$500** por persona al mes para usu
 
 📋 **COBERTURAS INCLUIDAS:**
 • Teleconsulta medicina general (2 eventos por año)
-• Telenutrición (ilimitado)
 • Telepsicología (2 eventos por año)
+• Telenutrición y asesoría nutricional (2 eventos por año)
 • Descuentos en farmacias (ilimitado)
 
 ---
@@ -874,8 +874,8 @@ Como cliente especial de Coltefinanciera, disfrutarás de 3 meses completamente 
 
 Tu asistencia incluye:
 • Teleconsulta medicina general (2 eventos por año)
-• Telenutrición ilimitada
 • Telepsicología (2 eventos por año)
+• Telenutrición y asesoría nutricional (2 eventos por año)
 • Descuentos ilimitados en farmacias
 
 Tu cobertura está activa desde este momento y no requiere ningún pago adicional durante los primeros 3 meses.
@@ -902,11 +902,10 @@ Coltefinanciera Seguros`,
 
         <p>Como cliente especial de Coltefinanciera, disfrutarás de <strong>3 meses completamente gratis</strong> de cobertura.</p>
 
-        <h3 style="color: #27ae60;">Tu asistencia incluye:</h3>
-        <ul>
+        <h3 style="color: #27ae60;">Tu asistencia incluye:</h3>        <ul>
             <li>Teleconsulta medicina general (2 eventos por año)</li>
-            <li>Telenutrición ilimitada</li>
             <li>Telepsicología (2 eventos por año)</li>
+            <li>Telenutrición y asesoría nutricional (2 eventos por año)</li>
             <li>Descuentos ilimitados en farmacias</li>
         </ul>
 
@@ -1118,6 +1117,94 @@ Una vez que tengas esta información completa, podremos generar una cotización 
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error('❌ Error al buscar en Supabase para seguros de autos:', errorMessage);
         return "Lo siento, ocurrió un error al buscar en los documentos de seguros de autos. Por favor intenta nuevamente.";
+    }
+}
+/**
+ * Busca información específica en los documentos de mascotas almacenados en Supabase
+ * @param query - La consulta del usuario para buscar en los documentos de mascotas
+ * @returns Resultados de la búsqueda o mensaje de error
+ */
+export async function searchMascotaDocuments(query) {
+    console.log('🐾 [MASCOTA] Procesando consulta:', query);
+    // DETECTAR CONSULTAS DE PRECIO Y RESPONDER CON INFORMACIÓN ESPECÍFICA
+    const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|cuanto|tarifa|valor|cotización|económica|propuesta|cuestan|plan|mensual|anual/i.test(query);
+    if (isPriceQuery) {
+        console.log('💰 [PRECIO MASCOTAS DETECTADO] Respondiendo con información de precios');
+        return `💰 **INFORMACIÓN SOBRE PRECIOS DE SEGUROS PARA MASCOTAS**
+
+Nuestros seguros para mascotas están diseñados para brindar la mejor protección a tu compañero fiel. Los precios varían según el tipo de mascota, edad, raza y cobertura deseada.
+
+🐕 **FACTORES QUE INFLUYEN EN EL PRECIO:**
+• **Tipo de mascota** (perro, gato, otros)
+• **Edad de la mascota** (cachorros, adultos, senior)
+• **Raza** (algunas razas tienen mayor predisposición a enfermedades)
+• **Cobertura deseada** (básica, intermedia, premium)
+• **Historial médico** de la mascota
+
+🏥 **COBERTURAS DISPONIBLES:**
+• Consultas veterinarias de rutina
+• Atención de urgencias y emergencias  
+• Cirugías y procedimientos especializados
+• Vacunación y desparasitación
+• Exámenes de laboratorio y diagnóstico
+• Medicamentos prescritos
+• Hospitalización
+
+💡 **VENTAJAS DE NUESTRO SEGURO:**
+• Red amplia de clínicas veterinarias afiliadas
+• Atención 24/7 para emergencias
+• Sin períodos de carencia para accidentes
+• Cobertura desde el primer día
+• Planes flexibles según tu presupuesto
+
+¿Te gustaría conocer más detalles sobre nuestros planes específicos para tu mascota?`;
+    }
+    try {
+        // Para consultas que NO son de precio, usar búsqueda vectorial
+        console.log('🔄 Intentando búsqueda vectorial en Supabase para mascotas...');
+        const { searchMascotaVectors } = await import('./retrievers');
+        const supabaseResults = await searchMascotaVectors(query);
+        if (supabaseResults && supabaseResults.length > 0) {
+            console.log('✅ Usando resultados vectoriales para seguros de mascotas');
+            return formatSupabaseResults(supabaseResults, "Seguros para Mascotas");
+        }
+        // Fallback: búsqueda simple en caso de que la vectorial no funcione
+        const supabase = createSupabaseClient();
+        const { data: mascotaResults, error } = await supabase
+            .from('mascota_documents')
+            .select('id, content, metadata')
+            .ilike('content', `%${query}%`)
+            .limit(3);
+        if (error) {
+            console.error('❌ Error en búsqueda fallback de mascotas:', error);
+            return "Lo siento, ocurrió un error al buscar en los documentos de seguros para mascotas. Por favor intenta nuevamente.";
+        }
+        if (!mascotaResults || mascotaResults.length === 0) {
+            return "Lo siento, no encontré información específica sobre tu consulta en los documentos de seguros para mascotas. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro para tu mascota?";
+        }
+        console.log('✅ Encontrados', mascotaResults.length, 'resultados en mascota_documents');
+        // Formatear resultados usando fallback simple
+        let response = "Según la información de nuestra base de datos de seguros para mascotas, esto es lo que encontré:\n\n";
+        mascotaResults.forEach((result, index) => {
+            const title = result.metadata?.title || `Documento de Seguros para Mascotas #${result.id}`;
+            response += `🐾 **${title}**\n`;
+            response += `${result.content}\n`;
+            if (result.metadata && typeof result.metadata === 'object') {
+                const metaStr = JSON.stringify(result.metadata);
+                if (metaStr !== '{}') {
+                    response += `📄 Información adicional: ${metaStr}\n`;
+                }
+            }
+            if (index < mascotaResults.length - 1) {
+                response += "\n---\n\n";
+            }
+        });
+        return response;
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Error al buscar en Supabase para seguros de mascotas:', errorMessage);
+        return "Lo siento, ocurrió un error al buscar en los documentos de seguros para mascotas. Por favor intenta nuevamente.";
     }
 }
 /**

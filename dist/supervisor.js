@@ -6,6 +6,11 @@ import { START, StateGraph } from "@langchain/langgraph";
 import { MemorySaver } from "@langchain/langgraph";
 import { AgentState } from "./agents/agentState.js";
 import { luciaServiceNode } from "./agents/luciaServiceAgent.js";
+// Agentes especializados adicionales disponibles (no usados en flujo actual simplificado):
+// import { mascotaServiceNode } from "./agents/mascotaServiceAgent.js";
+// import { bienestarServiceNode } from "./agents/bienestarServiceAgent.js";  
+// import { soatServiceNode } from "./agents/soatServiceAgent.js";
+// import { vehicleServiceNode } from "./agents/vehicleServiceAgent.js";
 import { llm } from "./config/llm.js";
 dotenv.config();
 const checkpointer = new MemorySaver();

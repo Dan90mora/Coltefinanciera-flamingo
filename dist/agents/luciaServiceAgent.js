@@ -4,7 +4,7 @@ import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
 import { llm } from "../config/llm.js";
 import { MESSAGES } from '../config/constants.js';
-import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, consultAutosSpecialistTool, consultSoatSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool, sendVehicleQuoteEmailTool } from "../tools/tools.js";
+import { consultDentixSpecialistTool, consultCredintegralSpecialistTool, consultVidaDeudorSpecialistTool, consultBienestarSpecialistTool, consultAutosSpecialistTool, consultSoatSpecialistTool, consultMascotaSpecialistTool, searchDentixClientTool, extractPhoneNumberTool, registerDentixClientTool, sendPaymentLinkEmailTool, confirmAndUpdateClientDataTool, sendVidaDeudorActivationEmailTool, showVidaDeudorClientDataTool, updateVidaDeudorClientDataTool, sendVehicleQuoteEmailTool } from "../tools/tools.js";
 import { END } from "@langchain/langgraph";
 dotenv.config();
 const luciaServiceAgent = createReactAgent({
@@ -16,6 +16,7 @@ const luciaServiceAgent = createReactAgent({
         consultBienestarSpecialistTool, // <-- Nueva herramienta para Bienestar Plus
         consultAutosSpecialistTool, // <-- Nueva herramienta para seguros de autos
         consultSoatSpecialistTool, // <-- Nueva herramienta para seguros SOAT
+        consultMascotaSpecialistTool, // <-- Nueva herramienta para seguros de mascotas
         //consultInsuranceSpecialistTool,
         searchDentixClientTool,
         extractPhoneNumberTool,
@@ -126,6 +127,46 @@ IMPORTANTE: En mensajes posteriores de esta misma conversación, NO repitas su n
 
 TONO: Personalizado y especializado en el primer mensaje, experto y convincente con enfoque legal en mensajes siguientes.`;
                 }
+                else if (clientInfo.service === 'mascota') {
+                    // ✅ INICIALIZAR mascotaInsuranceData con datos del cliente identificado
+                    if (!state.mascotaInsuranceData) {
+                        state.mascotaInsuranceData = {
+                            fullName: clientInfo.name,
+                            cedula: clientInfo.document_id || null, // ✅ ASIGNAR CÉDULA DESDE BD
+                            birthDate: null,
+                            phone: phoneNumber,
+                            petName: null,
+                            petType: null,
+                            petBreed: null,
+                            petAge: null,
+                            petWeight: null,
+                            city: null
+                        };
+                        console.log('🐾 [LUCIA] Cliente de mascotas identificado, inicializando mascotaInsuranceData:', state.mascotaInsuranceData);
+                    }
+                    // Cliente existente con seguros para mascotas: activar modo especialista en mascotas
+                    greeting = `CLIENTE IDENTIFICADO - PRIMER MENSAJE ÚNICAMENTE: ¡Hola ${clientInfo.name}! 🐾 Veo que estás interesado en proteger a tu mascota y estoy aquí como especialista en seguros para mascotas para ayudarte con todas las dudas que tengas sobre la mejor protección veterinaria.
+
+DATOS DEL CLIENTE (SOLO PARA PRIMERA INTERACCIÓN):
+- Nombre: ${clientInfo.name}
+- Teléfono: ${phoneNumber}
+- Servicio: ${clientInfo.service}
+- Producto: ${clientInfo.product || 'No especificado'}
+${clientInfo.document_id ? `- Cédula: ${clientInfo.document_id}` : ''}
+
+INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
+
+1. **SALUDO PERSONALIZADO:** Salúdalo por su nombre de manera cálida y entusiasta (SOLO EN ESTE PRIMER MENSAJE)
+2. **ESPECIALISTA EN MASCOTAS:** Identifícate como experta en seguros para mascotas de Coltefinanciera 🐾
+3. **ATENCIÓN PERSONALIZADA:** Menciona que ves su interés en proteger a su mascota y estás aquí para ayudarle con todas sus dudas sobre seguros veterinarios
+4. **ACTIVACIÓN AUTOMÁTICA:** Para CUALQUIER consulta relacionada con seguros para mascotas, usa INMEDIATAMENTE la herramienta 'consultMascotaSpecialistTool' con la consulta del cliente
+5. **PERSISTENCIA EMOCIONAL:** Sé muy insistente pero amable para convencer al cliente sobre los beneficios de proteger a su mascota
+6. **ENFOQUE FAMILIAR:** Enfatiza que las mascotas son parte de la familia y merecen la mejor protección veterinaria
+
+IMPORTANTE: En mensajes posteriores de esta misma conversación, NO repitas su nombre constantemente. Manténte natural y directo como especialista en seguros para mascotas.
+
+TONO: Personalizado y emotivo en el primer mensaje, experto y convincente con enfoque familiar en mensajes siguientes.`;
+                }
                 else if (clientInfo.service === 'vidadeudor') {
                     // Cliente existente con vida deudor: informar sobre beneficio especial
                     const productInfo = clientInfo.product ? `por haber adquirido tu ${clientInfo.product}` : 'por ser cliente y tener un servicio/crédito';
@@ -143,7 +184,7 @@ INSTRUCCIONES PARA EL PRIMER SALUDO ÚNICAMENTE:
 2. **BENEFICIO ESPECIAL CON PRODUCTO:** Infórmale que ${productInfo} con nosotros, tiene derecho a la asistencia Vida Deudor (SOLO EN ESTE PRIMER MENSAJE)
 3. **IMPORTANTE:** Si tiene 'product', usa el nombre EXACTO del producto (${clientInfo.product}) en tu respuesta, NO uses palabras genéricas (SOLO EN ESTE PRIMER MENSAJE)
 4. **TERMINOLOGÍA:** SIEMPRE usa "asistencia Vida Deudor" NO "seguro Vida Deudor" 
-5. **MENSAJE INICIAL:** Menciona que tiene derecho a activar este beneficio y describe brevemente los servicios incluidos (teleconsulta, telenutrición, telepsicología, descuentos en farmacias) sin mencionar meses gratis
+5. **MENSAJE INICIAL:** Menciona que tiene derecho a activar este beneficio y describe brevemente los servicios incluidos (teleconsulta, telepsicología, descuentos en farmacias) sin mencionar meses gratis
 6. **PRECIO ESPECIAL:** Solo si pregunta específicamente por precio, entonces menciona los 3 meses gratis
 7. **PROCESO DE ACTIVACIÓN INMEDIATA:** Si menciona "quiero activar", "activar", "proceder", "adquirir" - usa INMEDIATAMENTE showVidaDeudorClientDataTool con el número ${phoneNumber} (NO preguntes nada más)
 
