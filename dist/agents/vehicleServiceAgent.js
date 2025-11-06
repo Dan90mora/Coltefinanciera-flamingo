@@ -2,14 +2,14 @@ import dotenv from "dotenv";
 import { HumanMessage } from "@langchain/core/messages";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
-import { searchAutosDocumentsTool, sendVehicleQuoteEmailTool } from "../tools/tools";
+import { consultAutosSpecialistTool, sendVehicleQuoteEmailTool } from "../tools/tools";
 import { llm } from "../config/llm";
 import { MESSAGES } from '../config/constants';
 import { searchDentixClientByPhone } from "../functions/functions";
 dotenv.config();
 const vehicleServiceAgent = createReactAgent({
     llm,
-    tools: [searchAutosDocumentsTool, sendVehicleQuoteEmailTool],
+    tools: [consultAutosSpecialistTool, sendVehicleQuoteEmailTool],
     stateModifier: new SystemMessage(MESSAGES.SYSTEM_VEHICLE_PROMPT)
 });
 export const vehicleServiceNode = async (state, config) => {
