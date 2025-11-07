@@ -229,17 +229,18 @@ router.post("/seguros/whatsapp", async (req, res) => {
             }
             const responseMessage = lastMessage.content;
             console.log("Respuesta IA:", responseMessage);
-            // Ejecutar la función si el mensaje es del agente
-            await saveChatHistory(fromNumber, responseMessage, false, '');
             //consultar si esta disponible para audios
             const isAvailableForAudio = await getAvailableForAudio(fromNumber);
             // 🆕 NUEVA LÓGICA: Detectar primer saludo (primera vez o +24h) y solicitudes de audio
+            // ✅ IMPORTANTE: Verificar ANTES de guardar la respuesta del agente
             console.log("🔍 ========== INICIANDO DETECCIÓN DE PRIMER SALUDO ==========");
             console.log("📞 Analizando para número:", fromNumber);
             console.log("⏰ Timestamp actual:", new Date().toISOString());
             console.log("🌍 Timezone servidor:", Intl.DateTimeFormat().resolvedOptions().timeZone);
             console.log("📅 Fecha local servidor:", new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }));
             const isFirstGreeting = await isFirstGreetingOfDay(fromNumber);
+            // Ejecutar la función si el mensaje es del agente (DESPUÉS de verificar primer saludo)
+            await saveChatHistory(fromNumber, responseMessage, false, '');
             console.log("🔍 ========== RESULTADO DETECCIÓN PRIMER SALUDO ==========");
             console.log("🎯 isFirstGreeting resultado:", isFirstGreeting);
             console.log("🔍 ========================================================");
