@@ -494,7 +494,7 @@ export const consultBienestarSpecialistTool = tool(async ({ customerQuery }) => 
         console.log('⚠️ [BIENESTAR] Consulta sobre servicio potencialmente no disponible detectada');
     }
     // Unificar todas las palabras clave de precio/costo/valor/tarifa
-    const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara|salud|médica|medicina|hospitalización|consultas|medicamentos|psicología/i.test(customerQuery);
+    const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara|salud|médica|medicina|consultas|medicamentos|psicología/i.test(customerQuery);
     const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización/i.test(customerQuery);
     const isBenefitQuery = /beneficio|beneficios|ventajas/i.test(customerQuery);
     const isAssistQuery = /asistencial|asistenciales|asistencia/i.test(customerQuery);
