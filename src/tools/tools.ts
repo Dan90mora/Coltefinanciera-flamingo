@@ -342,6 +342,7 @@ export const sendPaymentLinkEmailTool = tool(
 
 // HERRAMIENTA COMENTADA: Esta herramienta usaba searchVidaDeudorDocuments que devuelve precios hardcodeados
 // Para evitar que los agentes accedan a precios específicos para clientes existentes con vida deudor
+// Para evitar que los agentes accedan a precios específicos para clientes existentes con vida deudor
 /*
 export const searchVidaDeudorDocumentsTool = tool(
     async ({ query }: { query: string }) => {
@@ -428,12 +429,16 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
         const vectorResults = await searchVidaDeudorVectors(customerQuery);
           if (vectorResults && vectorResults.length > 0) {
           console.log('✅ [INFORMACIÓN ENCONTRADA] Procesando resultados de asistenciavida_documents');          // ✅ AGREGAR FILTRO DE RELEVANCIA como en otras herramientas
-          let relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
-
-          // 🚨 FILTRO CRÍTICO: Excluir documentos de agendamiento durante consultas generales
+          let relevantResults = vectorResults.filter(result => result.final_rank > 0.01);          // 🚨 FILTRO CRÍTICO: Excluir documentos de agendamiento durante consultas generales
           // Los documentos ID 6 y 41 contienen información sobre cómo agendar servicios YA ACTIVADOS
           // Estos documentos NO deben aparecer cuando alguien está consultando sobre activación o información general
           const excludeSchedulingDocs = relevantResults.filter(result => {
+            // Verificación de seguridad para contenido válido
+            if (!result || !result.content || typeof result.content !== 'string') {
+              console.log(`🚫 [FILTRADO] Resultado inválido o sin contenido: ${result?.id || 'unknown'}`);
+              return false;
+            }
+            
             // Excluir documentos que contienen información de agendamiento (4320020, enlinea.sdsigma.com)
             const hasSchedulingInfo = result.content.includes('4320020') ||
                                     result.content.includes('enlinea.sdsigma.com') ||
@@ -454,19 +459,12 @@ Como ya tienes activada tu asistencia Vida Deudor con 3 meses completamente GRAT
             // Continuar al else (información general)
           } else {
             console.log('✅ [INFORMACIÓN ESPECÍFICA] Encontrada información relevante en asistenciavida_documents');
-            
-            // ESPECÍFICO: Mostrar TODO lo que venga de la base de datos tal como está
-            let response = '';
-            
-            // Personalizar el encabezado según la información del cliente
-            if (finalClientInfo && finalClientInfo.service === 'vidadeudor' && finalClientInfo.product) {
-              response = `🎯 **Información sobre tu asistencia Vida Deudor:**\n\n`;
-            } else if (finalClientInfo && finalClientInfo.service === 'vidadeudor') {
-              response = `🎯 **Información sobre tu asistencia Vida Deudor:**\n\n`;
-            } else {
-              response = '🛡️ Según nuestra base de datos de Vida Deudor, aquí tienes la información:\n\n';
-            }
-            
+                  // Inicializar variables para extracción
+        let response = '';
+        let foundSection = null;
+        let foundInChunk = null;
+        
+        // Extracción dirigida según el tipo de consulta específica
             relevantResults.slice(0, 3).forEach((result, index) => {
               const fileName = result.metadata?.fileName || 'Documento Vida Deudor';
               response += `📋 **${fileName.replace('.txt', '')}**\n`;
@@ -556,31 +554,70 @@ export const confirmAndUpdateClientDataTool = tool(
 export const consultBienestarSpecialistTool = tool(
     async ({ customerQuery }: { customerQuery: string }) => {
       console.log(`🌟 Lucia consulta al especialista Bienestar Plus (SOLO Supabase): ${customerQuery}`);
+        // NEW: Detector for presential services questions
+      const isPresencialQuery = /presencial|presenciales|en persona|físico|física|cara a cara|domicilio|a domicilio|en casa|van a|venir a|visita|visitarme|vienen a|presencialmente|pueden venir|vienen|puede venir/i.test(customerQuery);
       
-      // Detectar consultas sobre servicios específicos potencialmente no disponibles
+      if (isPresencialQuery) {
+        console.log('🏠 [PRESENCIAL DETECTADO] Respondiendo con información específica');
+        return `🏠 **INFORMACIÓN SOBRE SERVICIOS PRESENCIALES EN BIENESTAR PLUS**
+
+Todos los servicios son **virtuales** excepto:
+
+✅ **SERVICIOS PRESENCIALES DISPONIBLES:**
+• **Médico a domicilio** - Atención médica en tu hogar
+• **Acompañamiento de enfermería** - Cuidado profesional personalizado
+• **Traslados terrestres a citas médicas** - Transporte seguro y confiable
+
+📱 **SERVICIOS VIRTUALES:**
+• Teleconsulta medicina general
+• Telepsicología  
+• Descuentos en farmacias
+• Y todos los demás servicios incluidos en tu plan
+
+¿Te gustaría más información sobre alguno de estos servicios específicos?`;
+      }      // Detectar consultas sobre servicios específicos potencialmente no disponibles
       const problematicServices = /telenutrición|nutrición|nutricional|asesoría nutricional|consulta nutricional|nutricionista|dietista/i;
       if (problematicServices.test(customerQuery)) {
         console.log('⚠️ [BIENESTAR] Consulta sobre servicio potencialmente no disponible detectada');
       }
+        // Detectores específicos para consultas de Bienestar Plus
+      const isTrasladoQuery = /traslado|transportar|llevan|movilizan|me hacen|ambulancia|movilizar/i.test(customerQuery);
+      const isConsultaQuery = /consulta|médico|doctor|cita|atención médica|ver al médico|ir al médico/i.test(customerQuery);
+      const isMedicamentoQuery = /medicamento|medicina|fármaco|prescripción|receta|droga/i.test(customerQuery);
+      const isEmergenciaQuery = /emergencia|urgencia|urgente|accidente|grave|crítico/i.test(customerQuery);
+      const isExclusionQuery = /no cubre|excluye|exclusiones|qué no|no incluye|fuera de/i.test(customerQuery);
+      const isReembolsoQuery = /reembolso|devuelven|pagar|reintegro|me pagan|devolver|reembolsar/i.test(customerQuery);
       
-      // Unificar todas las palabras clave de precio/costo/valor/tarifa
-      const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|beneficios|protección|ampara|salud|médica|medicina|consultas|medicamentos|psicología/i.test(customerQuery);
+      // Detectores generales (mantenidos para compatibilidad)
+      const isCoverageQuery = /cobertura|cubre|abarca|servicios|incluye|esperar|protección|ampara/i.test(customerQuery);
       const isPriceQuery = /precio|cuesta|vale|pagar|costo|cuánto|propuesta económica|económica|tarifa|valor|cotización/i.test(customerQuery);
       const isBenefitQuery = /beneficio|beneficios|ventajas/i.test(customerQuery);
-      const isAssistQuery = /asistencial|asistenciales|asistencia/i.test(customerQuery);
-      try {
-        const { searchBienestarVectors } = await import('../functions/retrievers.js');
-        const { extractBienestarSection } = await import('../functions/functions.js');
-        let searchQuery = customerQuery;
-        // Si es consulta de precio/costo/valor/tarifa, forzar búsqueda por 'tarifa'
+      const isAssistQuery = /asistencial|asistenciales|asistencia/i.test(customerQuery);        try {        const { searchBienestarVectors } = await import('../functions/retrievers.js');
+        const { extractBienestarSection } = await import('../functions/functions.js');let searchQuery = customerQuery;
+        // Búsqueda dirigida según el tipo de consulta específica
         if (isPriceQuery) {
           searchQuery = `tarifa ${customerQuery}`;
-        } else if (isCoverageQuery) {
-          searchQuery = `cobertura servicios médicos ${customerQuery}`;
-        }
-        console.log('[DEBUG] Query enviada a searchBienestarVectors:', searchQuery);
+        } else if (isPresencialQuery) {
+          searchQuery = `presencial domicilio traslado enfermería ${customerQuery}`;
+        } else if (isTrasladoQuery) {
+          searchQuery = `traslado transporte ${customerQuery}`;
+        } else if (isConsultaQuery) {
+          searchQuery = `consulta médica ${customerQuery}`;
+        } else if (isMedicamentoQuery) {
+          searchQuery = `medicamento medicina ${customerQuery}`;
+        } else if (isEmergenciaQuery) {
+          searchQuery = `emergencia urgencia ${customerQuery}`;
+        } else if (isExclusionQuery) {
+          searchQuery = `exclusiones no cubre ${customerQuery}`;
+        } else if (isReembolsoQuery) {
+          searchQuery = `reembolso pago ${customerQuery}`;
+        } else if (isCoverageQuery && !isReembolsoQuery) {
+          // Para consultas generales de cobertura, buscar información general, NO reembolsos
+          searchQuery = `cobertura servicios médicos teleconsulta medicina ${customerQuery}`;
+        }console.log('[DEBUG] Query enviada a searchBienestarVectors:', searchQuery);
         const vectorResults = await searchBienestarVectors(searchQuery);
-        console.log('[DEBUG] Resultados crudos de searchBienestarVectors:', JSON.stringify(vectorResults, null, 2));        if (!vectorResults || vectorResults.length === 0) {
+        console.log('[DEBUG] Resultados crudos de searchBienestarVectors:', JSON.stringify(vectorResults, null, 2));
+        if (!vectorResults || vectorResults.length === 0) {
           console.log('[DEBUG] No se encontraron resultados vectoriales relevantes.');
           
           // Mensaje específico para servicios problemáticos
@@ -589,9 +626,35 @@ export const consultBienestarSpecialistTool = tool(
           }
           
           return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de Bienestar Plus. ¿Podrías reformular tu pregunta o ser más específico sobre el seguro de bienestar familiar?';
+        }        const relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
+        console.log('[DEBUG] Resultados relevantes (final_rank > 0.01):', JSON.stringify(relevantResults, null, 2));
+          // Filtro especial: Para consultas generales de cobertura, excluir chunks específicos de reembolso
+        let filteredResults = relevantResults;
+        if (isCoverageQuery && !isReembolsoQuery) {
+          filteredResults = relevantResults.filter(chunk => {
+            // Verificación de seguridad para contenido válido
+            if (!chunk || !chunk.content || typeof chunk.content !== 'string') {
+              console.log(`[FILTRO REEMBOLSO] Chunk inválido o sin contenido: ${chunk?.id || 'unknown'}`);
+              return false;
+            }
+            
+            const content = chunk.content.toLowerCase();
+            const isReembolsoChunk = 
+              content.includes('reembolso de gastos') ||
+              content.includes('gastos médicos cubiertos') ||
+              content.includes('comprobantes de gastos') ||
+              content.includes('solicitud de reembolso') ||
+              content.includes('reembolsaremos') ||
+              content.includes('reembolsar') ||
+              content.includes('casos que pueden aplicar para reembolso');
+            
+            console.log(`[FILTRO REEMBOLSO] Chunk ID: ${chunk.id}, Es reembolso: ${isReembolsoChunk}, Contenido: ${content.substring(0, 100)}...`);
+            return !isReembolsoChunk;
+          });
+          console.log(`[DEBUG] Después del filtro de reembolso - Chunks finales: ${filteredResults.length}`);
         }
-        const relevantResults = vectorResults.filter(result => result.final_rank > 0.01);
-        console.log('[DEBUG] Resultados relevantes (final_rank > 0.01):', JSON.stringify(relevantResults, null, 2));        if (relevantResults.length === 0) {
+        
+        if (filteredResults.length === 0) {
           console.log('[DEBUG] Ningún resultado relevante tras el filtrado.');
           
           // Mensaje específico para servicios problemáticos  
@@ -599,14 +662,14 @@ export const consultBienestarSpecialistTool = tool(
             return 'Consultando nuestra documentación oficial de Bienestar Plus... No encontré información sobre servicios de telenutrición o asesoría nutricional en nuestra documentación oficial. Te puedo informar sobre los servicios de salud que SÍ están confirmados y disponibles en nuestro plan de Bienestar Plus. ¿Te gustaría conocer los servicios médicos verificados que incluye?';
           }
           
-          return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de seguros de Bienestar Plus. Mi especialidad son los seguros de bienestar familiar, salud, medicina y protección integral. ¿Podrías preguntarme algo relacionado con seguros de bienestar familiar?';
-        }
-        // Extracción y formateo especial: buscar en TODOS los chunks
+          return 'Lo siento, no encontré información específica sobre tu consulta en la base de datos de seguros de Bienestar Plus. Mi especialidad son los seguros de bienestar familiar, salud, medicina y protección integral. ¿Podrías preguntarme algo relacionado con seguros de bienestar familiar?';        }
+        
+        // Inicializar variables para extracción
         let response = '';
         let foundSection = null;
-        let foundInChunk = null;
+        let foundInChunk = null;        // Extracción dirigida según el tipo de consulta específica
         if (isPriceQuery) {
-          for (const result of relevantResults) {
+          for (const result of filteredResults) {
             const section = extractBienestarSection(result.content, 'precio');
             console.log('[DEBUG] Sección extraída (precio) en chunk:', result.id, section);
             if (section) { foundSection = section; foundInChunk = result.id; break; }
@@ -614,9 +677,78 @@ export const consultBienestarSpecialistTool = tool(
           if (foundSection) {
             response = 'Te explico sobre los precios y costos del seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
             return response;
+          }        } else if (isPresencialQuery) {
+          for (const result of filteredResults) {
+            const section = extractBienestarSection(result.content, 'traslado');
+            console.log('[DEBUG] Sección extraída (presencial-traslado) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
           }
-        } else if (isCoverageQuery) {
-          for (const result of relevantResults) {
+          if (foundSection) {
+            response = 'Te explico sobre los servicios presenciales en el seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isTrasladoQuery) {
+          for (const result of filteredResults) {
+            const section = extractBienestarSection(result.content, 'traslado');
+            console.log('[DEBUG] Sección extraída (traslado) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Te explico sobre los traslados y transporte en el seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isConsultaQuery) {
+          for (const result of filteredResults) {
+            const section = extractBienestarSection(result.content, 'consultas');
+            console.log('[DEBUG] Sección extraída (consultas) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Te explico sobre las consultas médicas en el seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isMedicamentoQuery) {
+          for (const result of filteredResults) {
+            const section = extractBienestarSection(result.content, 'medicamentos');
+            console.log('[DEBUG] Sección extraída (medicamentos) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Te explico sobre los medicamentos cubiertos en el seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isEmergenciaQuery) {
+          for (const result of filteredResults) {
+            const section = extractBienestarSection(result.content, 'emergencias');
+            console.log('[DEBUG] Sección extraída (emergencias) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Te explico sobre la atención de emergencias en el seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isExclusionQuery) {
+          for (const result of filteredResults) {
+            const section = extractBienestarSection(result.content, 'exclusiones');
+            console.log('[DEBUG] Sección extraída (exclusiones) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Te explico sobre las exclusiones del seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }
+        } else if (isReembolsoQuery) {
+          for (const result of filteredResults) {
+            const section = extractBienestarSection(result.content, 'reembolsos');
+            console.log('[DEBUG] Sección extraída (reembolsos) en chunk:', result.id, section);
+            if (section) { foundSection = section; foundInChunk = result.id; break; }
+          }
+          if (foundSection) {
+            response = 'Te explico sobre los reembolsos en el seguro de Bienestar Plus:\n\n' + foundSection + `\n\n[Extraído del chunk ID: ${foundInChunk}]`;
+            return response;
+          }        } else if (isCoverageQuery) {
+          // Para consultas de cobertura general, priorizar chunks sin información específica de reembolso
+          for (const result of filteredResults) {
             const section = extractBienestarSection(result.content, 'cobertura');
             console.log('[DEBUG] Sección extraída (cobertura) en chunk:', result.id, section);
             if (section) { foundSection = section; foundInChunk = result.id; break; }
@@ -626,7 +758,7 @@ export const consultBienestarSpecialistTool = tool(
             return response;
           }
         } else if (isBenefitQuery) {
-          for (const result of relevantResults) {
+          for (const result of filteredResults) {
             const section = extractBienestarSection(result.content, 'beneficios');
             console.log('[DEBUG] Sección extraída (beneficios) en chunk:', result.id, section);
             if (section) { foundSection = section; foundInChunk = result.id; break; }
@@ -636,7 +768,7 @@ export const consultBienestarSpecialistTool = tool(
             return response;
           }
         } else if (isAssistQuery) {
-          for (const result of relevantResults) {
+          for (const result of filteredResults) {
             const section = extractBienestarSection(result.content, 'asistenciales');
             console.log('[DEBUG] Sección extraída (asistenciales) en chunk:', result.id, section);
             if (section) { foundSection = section; foundInChunk = result.id; break; }
@@ -646,14 +778,14 @@ export const consultBienestarSpecialistTool = tool(
             return response;
           }
         }
-        // Si no se encontró sección específica, fallback a respuesta general
+          // Si no se encontró sección específica, fallback a respuesta general filtrada
         response = 'Como especialista en seguros de Bienestar Plus, te proporciono esta información:\n\n';
-        relevantResults.forEach((result, index) => {
+        filteredResults.forEach((result, index) => {
           const fileName = result.metadata?.fileName || 'Documento Bienestar Plus';
           response += `📋 **${fileName.replace('.txt', '')}**\n`;
           response += `${result.content}\n`;
           response += `(Relevancia: ${(result.final_rank * 100).toFixed(1)}%)\n`;
-          if (index < relevantResults.length - 1) response += "\n---\n\n";
+          if (index < filteredResults.length - 1) response += "\n---\n\n";
         });
         return response;
       } catch (error) {

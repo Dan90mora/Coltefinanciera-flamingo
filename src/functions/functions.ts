@@ -876,7 +876,30 @@ export async function searchBienestarDocuments(query: string): Promise<string> {
  * @param type - Tipo de sección: 'precio', 'cobertura', 'beneficios', 'asistenciales'
  * @returns Texto extraído o null
  */
-export function extractBienestarSection(content: string, type: 'precio'|'cobertura'|'beneficios'|'asistenciales'): string | null {
+export function extractBienestarSection(content: string, type: 'precio'|'cobertura'|'beneficios'|'asistenciales'|'traslado'|'consultas'|'medicamentos'|'emergencias'|'exclusiones'|'reembolsos'): string | null {
+  // Verificación de seguridad para contenido válido
+  if (!content || typeof content !== 'string') {
+    console.log('⚠️ [EXTRACT FILTER] Contenido inválido o undefined');
+    return null;
+  }
+
+  // 🚨 FILTRO CRÍTICO: Si estamos buscando cobertura general pero el contenido es específico de reembolso, rechazarlo
+  if (type === 'cobertura') {
+    const contentLower = content.toLowerCase();
+    const isReembolsoSpecificContent = 
+      contentLower.includes('casos que pueden aplicar el servicio por reembolso') ||
+      contentLower.includes('condiciones para la procedencia del reembolso') ||
+      contentLower.includes('servicios que aplican para reembolso') ||
+      contentLower.includes('reembolso solo será autorizado') ||
+      contentLower.includes('plan de reembolso') ||
+      contentLower.includes('modalidad de reembolso');
+    
+    if (isReembolsoSpecificContent) {
+      console.log('🚫 [EXTRACT FILTER] Rechazando contenido específico de reembolso para consulta de cobertura general');
+      return null;
+    }
+  }
+
   const lines = content.split('\n');
   let sectionTitles: string[] = [];
   let sectionName = '';
@@ -884,9 +907,8 @@ export function extractBienestarSection(content: string, type: 'precio'|'cobertu
     case 'precio':
       sectionTitles = ['propuesta económica', 'tarifa', 'precio', 'valor', 'costo'];
       sectionName = 'PRECIOS Y TARIFAS';
-      break;
-    case 'cobertura':
-      sectionTitles = ['cobertura', 'servicios cubiertos', 'qué cubre', 'servicios incluidos'];
+      break;    case 'cobertura':
+      sectionTitles = ['cobertura', 'servicios cubiertos', 'qué cubre', 'servicios incluidos', 'coberturas asistenciales', 'detalle de la cobertura', 'servicios eventos'];
       sectionName = 'COBERTURA';
       break;
     case 'beneficios':
@@ -897,10 +919,33 @@ export function extractBienestarSection(content: string, type: 'precio'|'cobertu
       sectionTitles = ['asistenciales', 'servicios asistenciales', 'asistencia'];
       sectionName = 'ASISTENCIALES';
       break;
+    case 'traslado':
+      sectionTitles = ['traslado', 'traslados', 'transporte', 'movilización', 'llevar', 'ambulancia'];
+      sectionName = 'TRASLADOS Y TRANSPORTE';
+      break;
+    case 'consultas':
+      sectionTitles = ['consulta', 'consultas', 'cita médica', 'atención médica', 'doctor', 'médico'];
+      sectionName = 'CONSULTAS MÉDICAS';
+      break;
+    case 'medicamentos':
+      sectionTitles = ['medicamento', 'medicamentos', 'medicina', 'fármaco', 'prescripción'];
+      sectionName = 'MEDICAMENTOS';
+      break;
+    case 'emergencias':
+      sectionTitles = ['emergencia', 'emergencias', 'urgencia', 'urgencias', 'urgente'];
+      sectionName = 'EMERGENCIAS Y URGENCIAS';
+      break;
+    case 'exclusiones':
+      sectionTitles = ['exclusión', 'exclusiones', 'no cubre', 'no incluye', 'excluye'];
+      sectionName = 'EXCLUSIONES';
+      break;
+    case 'reembolsos':
+      sectionTitles = ['reembolso', 'reembolsos', 'reintegro', 'devolución', 'pago', 'devolver'];
+      sectionName = 'REEMBOLSOS Y PAGOS';
+      break;
     default:
       return null;
-  }
-  // Buscar la línea que contiene el título de la sección
+  }  // Buscar la línea que contiene el título de la sección
   let startIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].toLowerCase();
@@ -909,6 +954,7 @@ export function extractBienestarSection(content: string, type: 'precio'|'cobertu
       break;
     }
   }
+  
   // Si no hay título pero es consulta de precio y el chunk contiene un monto, devolver el bloque completo
   if (type === 'precio' && startIdx === -1) {
     const montoRegex = /\$\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?/;
@@ -930,11 +976,12 @@ export function extractBienestarSection(content: string, type: 'precio'|'cobertu
     if (type === 'precio' && montoRegex.test(l)) foundMonto = true;
     // Si detecta el inicio de otra sección, corta (excepto si es precio y aún no encontró monto)
     if (j !== startIdx && /^([A-ZÁÉÍÓÚÑ ]{5,}|\*\*.+\*\*)$/.test(l.trim()) && (type !== 'precio' || foundMonto)) break;
-    extracted += l + '\n';
-    // Si es precio y ya encontró monto y hay línea vacía después, corta
+    extracted += l + '\n';    // Si es precio y ya encontró monto y hay línea vacía después, corta
     if (type === 'precio' && foundMonto && l.trim() === '' && lines[j+1] && lines[j+1].trim() === '') break;
   }
-  return extracted.trim();
+  const result = extracted.trim();
+  console.log(`🔍 [DIAGNÓSTICO] Resultado extraído:\n${result || 'NULL - No se encontró sección'}`);
+  return result;
 }
 
 /**

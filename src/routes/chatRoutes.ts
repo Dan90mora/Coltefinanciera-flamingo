@@ -324,7 +324,7 @@ router.post("/seguros/whatsapp", async (req, res) => {
       const mentionsAudio = responseMessage.toLowerCase().includes("audio");
       const hasUrls = /https?:\/\/[^\s]+|www\.[^\s]+/i.test(responseMessage);
       const hasEmails = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(responseMessage);
-      const exceedsLimit = responseMessage.length > 400;
+      const exceedsLimit = responseMessage.length > 450;
       
       // Las restricciones existentes siempre prevalecen
       const hasBlockingRestrictions = hasNumbers || hasSiglas || mentionsAudio || hasUrls || hasEmails || exceedsLimit;
@@ -342,7 +342,7 @@ router.post("/seguros/whatsapp", async (req, res) => {
       console.log("     - Menciona 'audio':", mentionsAudio);
       console.log("     - URLs:", hasUrls);
       console.log("     - Emails:", hasEmails);
-      console.log("     - Excede 400 chars:", exceedsLimit);
+      console.log("     - Excede 450 chars:", exceedsLimit);
       console.log("   ✅ Condiciones para audio:");
       console.log("     - Cliente disponible:", isAvailableForAudio);
       console.log("     - Es primer saludo (primera vez o +24h):", isFirstGreeting);
@@ -452,7 +452,7 @@ router.post("/seguros/whatsapp", async (req, res) => {
           console.log("   ❌ No es primer saludo Y cliente no solicitó audio");
         }
         
-        // Responder con el texto si es mayor de 400 caracteres
+        // Responder con el texto si es mayor de 450 caracteres
         if (responseMessage.length > 1000) {
           console.log("Response is too long, splitting by newline");
           const messageParts = responseMessage.split("\n\n");
@@ -538,8 +538,11 @@ router.post('/seguros/chat-dashboard', async (req, res) => {
     const twiml = new MessagingResponse();
     const { clientNumber, newMessage } = req.body;
 
-    const isAudioMessage = await newMessage.includes('https://firebasestorage.googleapis.com/v0/b/ultim-admin-dashboard.appspot.com/o/audios');
-    const isFileMessage = await newMessage.includes('https://firebasestorage.googleapis.com/v0/b/ultim-admin-dashboard.appspot.com/o/documents')
+    // Verificar si newMessage es válido antes de usar includes
+    const isAudioMessage = newMessage && typeof newMessage === 'string' && 
+                           newMessage.includes('https://firebasestorage.googleapis.com/v0/b/ultim-admin-dashboard.appspot.com/o/audios');
+    const isFileMessage = newMessage && typeof newMessage === 'string' && 
+                          newMessage.includes('https://firebasestorage.googleapis.com/v0/b/ultim-admin-dashboard.appspot.com/o/documents');
 
     if(isAudioMessage) {
       console.log('Audio message detected');
@@ -642,6 +645,70 @@ router.post('/seguros/chat-dashboard', async (req, res) => {
     console.error('Error in chat route:', error);
     res.status(500).send({ 
       error: error instanceof Error ? error.message : "An unknown error occurred" 
+    });
+  }
+});
+
+// Endpoint de prueba para validar filtros de Bienestar Plus
+router.post('/seguros/test-bienestar', async (req, res) => {
+  try {
+    console.log('🧪 [PRUEBA BIENESTAR] Iniciando prueba de filtro');
+    const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Se requiere el campo "message"' });
+    }
+    
+    // Importar y usar directamente la herramienta de Bienestar Plus
+    const { consultBienestarSpecialistTool } = await import('../tools/tools.js');
+    
+    console.log(`🧪 [PRUEBA BIENESTAR] Consultando: "${message}"`);
+    const result = await consultBienestarSpecialistTool.invoke({ customerQuery: message });
+    
+    console.log(`🧪 [PRUEBA BIENESTAR] Respuesta obtenida: ${result.substring(0, 200)}...`);
+    
+    res.status(200).json({ 
+      success: true, 
+      query: message,
+      response: result 
+    });
+    
+  } catch (error) {
+    console.error('🧪 [PRUEBA BIENESTAR] Error:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : "Error desconocido" 
+    });
+  }
+});
+
+// Endpoint de prueba para validar filtros de Bienestar Plus
+router.post('/seguros/test-bienestar', async (req, res) => {
+  try {
+    console.log('🧪 [PRUEBA BIENESTAR] Iniciando prueba de filtro');
+    const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Se requiere el campo "message"' });
+    }
+    
+    // Importar y usar directamente la herramienta de Bienestar Plus
+    const { consultBienestarSpecialistTool } = await import('../tools/tools.js');
+    
+    console.log(`🧪 [PRUEBA BIENESTAR] Consultando: "${message}"`);
+    const result = await consultBienestarSpecialistTool.invoke({ customerQuery: message });
+    
+    console.log(`🧪 [PRUEBA BIENESTAR] Respuesta obtenida: ${result.substring(0, 200)}...`);
+    
+    res.status(200).json({ 
+      success: true, 
+      query: message,
+      response: result 
+    });
+    
+  } catch (error) {
+    console.error('🧪 [PRUEBA BIENESTAR] Error:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : "Error desconocido" 
     });
   }
 });
